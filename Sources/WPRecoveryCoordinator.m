@@ -19,6 +19,8 @@
 @property(nonatomic) NSTimeInterval maxPhaseMilliseconds;
 @property(nonatomic) BOOL cycleFailed;
 @property(nonatomic) NSTimeInterval lastCycleMilliseconds;
+@property(nonatomic) NSUInteger degradedRetryCount;
+- (void)scheduleDegradedHostRetry;
 @end
 @implementation WPRecoveryCoordinator
 - (instancetype)init{if((self=[super init]))_events=[NSMutableArray new];return self;}
@@ -30,7 +32,7 @@
 - (void)beginForeground {
     if(self.foreground){[self requestCalibration];return;}
     self.foreground=YES;self.temporarilySuspended=NO;self.generation++;self.cycles++;
-    self.pipelineStarted=NO;self.nextPhase=0;self.cycleFailed=NO;self.state=WPRecoveryStateInactive;self.beganAt=NSProcessInfo.processInfo.systemUptime;
+    self.pipelineStarted=NO;self.nextPhase=0;self.cycleFailed=NO;self.degradedRetryCount=0;self.state=WPRecoveryStateInactive;self.beganAt=NSProcessInfo.processInfo.systemUptime;
     [self requestCalibration];
 }
 - (void)endForeground {
@@ -58,15 +60,34 @@
         @catch(__unused NSException *exception){self.failures++;self.cycleFailed=YES;if(self.phaseFailed)self.phaseFailed(@"host");}
         self.calibrations++;[self record:@"host" duration:NSProcessInfo.processInfo.systemUptime-start error:!host];
         if(host && !self.pipelineStarted){
-            self.pipelineStarted=YES;self.state=WPRecoveryStateHostReady;[self scheduleNextPhaseAfter:.016];
+            self.degradedRetryCount=0;self.pipelineStarted=YES;self.state=WPRecoveryStateHostReady;[self scheduleNextPhaseAfter:.016];
         }else if(!host && !self.pipelineStarted){
-            if(NSProcessInfo.processInfo.systemUptime-self.beganAt>=2){self.state=WPRecoveryStateDegraded;return;}
+            if(NSProcessInfo.processInfo.systemUptime-self.beganAt>=2){self.state=WPRecoveryStateDegraded;[self scheduleDegradedHostRetry];return;}
             [self.timer invalidate];NSUInteger generation=self.generation;
             self.timer=[NSTimer timerWithTimeInterval:.15 repeats:NO block:^(__unused NSTimer *timer){
                 if(weakSelf.generation==generation)[weakSelf requestCalibration];
             }];[NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
         }
     });CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+// Low-frequency safety net when WeChat's host scene was unavailable for >2 seconds.
+// No native services are touched until calibrateHost returns YES. The timer is
+// automatically invalidated by backgrounding, suspension, or a successful phase.
+- (void)scheduleDegradedHostRetry {
+    [self.timer invalidate];self.timer=nil;
+    if(!self.foreground || self.temporarilySuspended || self.pipelineStarted)return;
+    NSTimeInterval delay=MIN(30.0,3.0*pow(2.0,(double)MIN(self.degradedRetryCount,4)));
+    self.degradedRetryCount=MIN(self.degradedRetryCount+1,(NSUInteger)5);
+    NSUInteger generation=self.generation;
+    __weak typeof(self) weakSelf=self;
+    self.timer=[NSTimer timerWithTimeInterval:delay repeats:NO block:^(__unused NSTimer *timer){
+        WPRecoveryCoordinator *self=weakSelf;
+        if(!self || !self.foreground || self.temporarilySuspended || self.generation!=generation || self.pipelineStarted)return;
+        self.timer=nil;
+        [self requestCalibration];
+    }];
+    self.timer.tolerance=MIN(1.0,delay/5.0);
+    [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
 }
 - (void)scheduleNextPhaseAfter:(NSTimeInterval)delay {
     [self.timer invalidate];self.timer=nil;
@@ -97,7 +118,7 @@
     return @{@"state":@[@"inactive",@"host-ready",@"warming",@"ready",@"degraded"][self.state],
         @"generation":@(self.generation),@"cycles":@(self.cycles),@"calibrations":@(self.calibrations),
         @"completedPhases":@(self.completedPhases),@"failures":@(self.failures),@"maxPhaseMilliseconds":@(self.maxPhaseMilliseconds),@"phaseP95Milliseconds":durations.count?durations[index]:@0,@"lastCycleMilliseconds":@(self.lastCycleMilliseconds),
-        @"pendingCalibration":@(self.calibrationPending),@"pendingStage":@(self.timer.isValid),@"events":self.events.copy};
+        @"pendingCalibration":@(self.calibrationPending),@"pendingStage":@(self.timer.isValid),@"degradedRetryCount":@(self.degradedRetryCount),@"events":self.events.copy};
 }
 - (void)dealloc {[self.timer invalidate];}
 @end

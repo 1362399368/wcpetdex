@@ -331,7 +331,7 @@ static void WPBSAddMessageNotify(id object,SEL selector,id username,id wrap,BOOL
     if(_active && _foreground && generation==_generation && ![_seen containsObject:message.identifier]){
         if(!WPBarrageShowsDetails())message.text=@"";
         [_seen addObject:message.identifier];_seenReceivedAt[message.identifier]=@(NSDate.date.timeIntervalSince1970);if(_seen.count>WPBSDedupLimit){NSString *expired=_seen.firstObject;[_seen removeObjectAtIndex:0];[_seenReceivedAt removeObjectForKey:expired];}
-        if(_inbox.count>=WPBSInboxLimit){[_inbox removeObjectAtIndex:0];_droppedCount++;}
+        if(_inbox.count>=WPBSInboxLimit){[_inbox removeObjectAtIndex:0];_droppedCount++;_rejections[@"inbox-overflow"]=@([_rejections[@"inbox-overflow"] unsignedIntegerValue]+1);}
         [_inbox addObject:message];
         if(!_scheduled){_scheduled=YES;schedule=YES;}
     }
@@ -465,6 +465,8 @@ static void WPBSAddMessageNotify(id object,SEL selector,id username,id wrap,BOOL
                     if(!_scheduled){_scheduled=YES;schedule=YES;}
                 }else{
                     // An older metadata retry must not displace a fresh arrival.
+                    NSString *reason=_inbox.count>=WPBSInboxLimit?@"metadata-retry-queue-full":@"metadata-retry-timeout-or-limit";
+                    _rejections[reason]=@([_rejections[reason] unsignedIntegerValue]+1);
                     [_eligibilityRetries removeObjectForKey:message.identifier];
                 }
                 [self.stateLock unlock];

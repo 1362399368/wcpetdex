@@ -11,9 +11,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleVersion</key>
-	<string>1207</string>
+	<string>1209</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.6</string>
+	<string>1.2.8</string>
 	<key>MinimumOSVersion</key>
 	<string>16.3</string>
 	<key>UILaunchScreen</key>

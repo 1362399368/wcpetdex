@@ -15,6 +15,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Display name from CContactMgr for any session username; empty when unknown.
 + (NSString *)displayNameForUsername:(NSString *)username;
 + (nullable UIViewController *)visibleController:(nullable UIViewController *)controller;
+/// Opens the selected partner's native chat and invokes WeChat's text-send path.
+/// Completion means the native method was invoked, not that WeChat confirmed delivery.
++ (void)sendTextToSelectedPartner:(NSString *)text inWindow:(nullable UIWindow *)window
+                      completion:(void (^)(BOOL invoked, NSString *message))completion;
 @end
 
 /// Searches local WeChat friends in the plugin's own picker and saves only

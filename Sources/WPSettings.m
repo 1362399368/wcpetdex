@@ -21,6 +21,7 @@
 #import "WPBarrageSettingsController.h"
 #import "WPQuickChatSettingsController.h"
 #import "WPQuickChatPreferences.h"
+#import "WPWorkCheckinReminder.h"
 
 static NSString * const WPConnectionStatusChangedNotification=@"WeChatPet.ConnectionStatusChanged";
 /// Closes the plugin panel first so the action happens in WeChat below it.
@@ -56,6 +57,27 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
         [weakSelf.navigationController pushViewController:[[WPPartnerPickerController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];}]];
     [partner addArrangedSubview:[self rowWithTitle:@"打开 TA 的聊天" detail:@"桌宠点击动作可在快捷功能中设置" actionTitle:@"测试" handler:^{
         WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.OpenPartner",nil);}]];
+    [self addSectionTitle:@"上班打卡提醒"];
+    UIStackView *checkin=[self addCard];
+    [checkin addArrangedSubview:[self switchRowWithTitle:@"工作日自动提醒 TA" detail:@"北京时间周一至周五 08:50–08:55 随机选一个时间；每天最多调用一次微信发送接口" on:[WPWorkCheckinReminder isEnabled] handler:^(BOOL on){
+        [WPPreferences() setBool:on forKey:@"workCheckinEnabled"];
+        [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
+    }]];
+    [checkin addArrangedSubview:[self rowWithTitle:@"提醒文案" detail:[WPPreferences() stringForKey:@"workCheckinMessage"]?:[WPWorkCheckinReminder defaultMessage] actionTitle:@"编辑" handler:^{
+        UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"上班打卡提醒" message:@"发送到已选择对象的微信聊天，最多 500 字。" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *field){field.text=[WPPreferences() stringForKey:@"workCheckinMessage"]?:[WPWorkCheckinReminder defaultMessage];field.clearButtonMode=UITextFieldViewModeWhileEditing;}];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action){
+            NSString *value=[alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+            if(value.length && value.length<=500){[WPPreferences() setObject:value forKey:@"workCheckinMessage"];[weakSelf reloadCards];}
+            else [weakSelf alert:@"提醒文案须为 1–500 字。"];
+        }]];
+        [weakSelf presentViewController:alert animated:YES completion:nil];
+    }]];
+    NSString *last=[WPPreferences() stringForKey:@"workCheckinSentDay"];
+    NSString *status=[WPPreferences() stringForKey:@"workCheckinLastStatus"];
+    [checkin addArrangedSubview:[self rowWithTitle:@"最近执行" detail:last.length?[NSString stringWithFormat:@"%@ · %@",last,status?:@"已调用发送接口"]:(status?:@"尚未执行") actionTitle:nil handler:nil]];
+    [self addNote:@"仅在本机微信运行于前台时尝试发送；若微信在选定时间后台运行，回到前台且仍在 08:55 前会补发。发送时会打开 TA 的聊天。微信关闭或锁屏时不会准时发送，实际送达请在微信聊天中确认。"];
     [self addSectionTitle:@"预览动作"];
     UIStackView *preview=[self addCard];
     UIStackView *buttons=[UIStackView new];buttons.axis=UILayoutConstraintAxisHorizontal;buttons.spacing=12;buttons.distribution=UIStackViewDistributionFillEqually;

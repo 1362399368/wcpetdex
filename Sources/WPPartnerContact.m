@@ -2,6 +2,7 @@
 #import "WPCommon.h"
 #import "WPResizableChat.h"
 #import "WPChatPresentationState.h"
+#import "WPWorkCheckinReminder.h"
 #import <objc/runtime.h>
 
 static char WPHalfNavigationKey;
@@ -365,6 +366,12 @@ static NSString *WPNameForContact(id contact) {
 // The partner route keeps its original wording; quick chat uses neutral text.
 + (void)openConversation:(NSString *)username partner:(BOOL)partner inWindow:(UIWindow *)window completion:(void (^)(BOOL, NSString *))completion {
     if (!window.rootViewController) { completion(NO, @"未找到微信主窗口，请回到微信主页后重试。"); return; }
+    // Match page-sheet single-flight behavior. Only one native navigation per host window.
+    WPNativeChatRequest *pending=objc_getAssociatedObject(window,&WPNativeChatRequestKey);
+    if(pending && !pending.finished){
+        if([pending.username isEqualToString:username] && pending.completions.count<8){[pending.completions addObject:[completion copy]];return;}
+        completion(NO,@"聊天正在打开，请稍候再切换。");return;
+    }
     id manager = WPContactService();
     id contact = WPContactForUsername(manager, username);
     Class contactClass = NSClassFromString(@"CContact");
@@ -398,8 +405,11 @@ static NSString *WPNameForContact(id contact) {
     if (boolType[0] != 'B' && boolType[0] != 'c') {
         completion(NO, @"当前微信版本的聊天跳转参数不兼容，暂未执行跳转。"); return;
     }
+    WPNativeChatRequest *request=[WPNativeChatRequest new];request.window=window;request.username=username;request.started=NSProcessInfo.processInfo.systemUptime;
+    request.completions=[NSMutableArray arrayWithObject:[completion copy]];
+    objc_setAssociatedObject(window,&WPNativeChatRequestKey,request,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+        NSInvocation *invocation=[NSInvocation invocationWithMethodSignature:signature];
         invocation.target = logic; invocation.selector = selector;
         __unsafe_unretained id contactArgument = contact, navigationArgument = navigation;
         unsigned char animated = 1;
@@ -407,12 +417,58 @@ static NSString *WPNameForContact(id contact) {
         [invocation setArgument:&navigationArgument atIndex:3];
         [invocation setArgument:&animated atIndex:4];
         [invocation invoke];
-        WPNativeChatRequest *request=[WPNativeChatRequest new];request.window=window;request.username=username;request.started=NSProcessInfo.processInfo.systemUptime;
-        request.completions=[NSMutableArray arrayWithObject:[completion copy]];
         [self inspectFullscreenChatRequest:request partner:partner];
     } @catch (__unused NSException *exception) {
-        completion(NO, @"此版本的聊天跳转未成功，请返回微信主页后重试。");
+        [self completeNativeChatRequest:request success:NO message:@"此版本的聊天跳转未成功，请返回微信主页后重试。"];
     }
+}
+
++ (void)sendTextToSelectedPartner:(NSString *)text inWindow:(UIWindow *)window
+                      completion:(void (^)(BOOL, NSString *))completion {
+    NSAssert(NSThread.isMainThread,@"Send WeChat text on the main queue");
+    NSString *username=[WPPreferences() stringForKey:@"partnerUsername"];
+    NSString *body=[text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if(!username.length || !window || window.hidden || !window.rootViewController ||
+       UIApplication.sharedApplication.applicationState!=UIApplicationStateActive){
+        completion(NO,@"微信未在前台，或尚未选择对象");return;
+    }
+    if(!body.length || body.length>500){completion(NO,@"提醒文案须为 1–500 字");return;}
+    if(![WPWorkCheckinReminder isWithinSendWindowAtDate:NSDate.date]){completion(NO,@"已超出今天的打卡提醒时段");return;}
+    [self openConversation:username partner:YES inWindow:window completion:^(BOOL opened,NSString *reason){
+        if(!opened){completion(NO,reason);return;}
+        if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive ||
+           ![WPWorkCheckinReminder isWithinSendWindowAtDate:NSDate.date] ||
+           ![[WPPreferences() stringForKey:@"partnerUsername"] isEqualToString:username] ||
+           ![WPChatPresentationActiveUsernameInWindow(window) isEqualToString:username]){
+            completion(NO,@"对象聊天已切换，未发送提醒");return;
+        }
+        id manager=WPWeChatService(@"MMMsgLogicManager");
+        id logic=WPObjectCall(manager,@"GetCurrentLogicController",nil,NO);
+        Class logicClass=NSClassFromString(@"WeixinContentLogicController");
+        id contact=WPObjectCall(logic,@"m_contact",nil,NO);
+        if(!logicClass || ![logic isKindOfClass:logicClass] ||
+           ![WPUsernameForValue(contact) isEqualToString:username]){
+            completion(NO,@"当前微信版本未找到对象聊天的文字发送接口");return;
+        }
+        SEL selector=NSSelectorFromString(@"SendTextMessage:replyingMessage:isPasted:");
+        NSMethodSignature *signature=WPSignature(logic,selector,3);
+        if(!signature || WPUnqualifiedType(signature.methodReturnType)[0]!='v' ||
+           !WPObjectType([signature getArgumentTypeAtIndex:2]) ||
+           !WPObjectType([signature getArgumentTypeAtIndex:3]) ||
+           !strchr("Bc",WPUnqualifiedType([signature getArgumentTypeAtIndex:4])[0])){
+            completion(NO,@"当前微信版本的文字发送参数不兼容");return;
+        }
+        @try {
+            NSInvocation *call=[NSInvocation invocationWithMethodSignature:signature];
+            call.target=logic;call.selector=selector;
+            __unsafe_unretained id content=body,reply=nil;unsigned char pasted=0;
+            [call setArgument:&content atIndex:2];[call setArgument:&reply atIndex:3];
+            [call setArgument:&pasted atIndex:4];[call invoke];
+            completion(YES,@"已调用微信发送接口，请在聊天中确认送达状态");
+        } @catch(__unused NSException *exception) {
+            completion(NO,@"微信文字发送接口未执行，请检查当前版本适配");
+        }
+    }];
 }
 @end
 

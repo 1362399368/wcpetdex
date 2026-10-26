@@ -7,10 +7,10 @@
 #error This source package builds the Zhouyou personal edition only.
 #endif
 #ifndef WP_VERSION_STRING
-#define WP_VERSION_STRING @"1.2.6"
+#define WP_VERSION_STRING @"1.2.8"
 #endif
 #ifndef WP_BUILD_VERSION
-#define WP_BUILD_VERSION 1207
+#define WP_BUILD_VERSION 1209
 #endif
 
 FOUNDATION_EXPORT BOOL WPCanUsePrivateFeatures(void);

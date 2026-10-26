@@ -138,7 +138,7 @@ static BOOL WPValidJSONBoolean(id value){
     self.wantsConnection=NO;self.generation++;self.connected=NO;self.stealthEffective=NO;self.peerSnapshot=nil;
     if(self.onPeerStatusChange)self.onPeerStatusChange();
     [self.socket cancelWithCloseCode:NSURLSessionWebSocketCloseCodeGoingAway reason:nil];self.socket=nil;
-    [self.session invalidateAndCancel];self.session=nil;[self failCallbacks:@"发送状态已保留，下次进入微信继续确认"];
+    [self.session invalidateAndCancel];self.session=nil;[self failCallbacks:@"互动已保存在本机，稍后重新核对送达状态"];
 }
 - (void)connectionFailed:(NSUInteger)generation{
     [self connectionFailed:generation error:nil];
@@ -152,7 +152,7 @@ static BOOL WPValidJSONBoolean(id value){
     if(error){diagnostic[@"errorDomain"]=error.domain?:@"";diagnostic[@"errorCode"]=@(error.code);}
     [WPPreferences() setObject:diagnostic forKey:@"lastSyncConnectionFailure"];
     [self.socket cancelWithCloseCode:NSURLSessionWebSocketCloseCodeGoingAway reason:nil];self.socket=nil;
-    [self.session invalidateAndCancel];self.session=nil;[self failCallbacks:@"网络断开，待送达记录已保留"];
+    [self.session invalidateAndCancel];self.session=nil;[self failCallbacks:@"网络连接中断，互动已保存在本机，送达状态待重新核对（不代表发送失败）"];
     [self status:WPCoupleConnectionFailureMessage(error,statusCode)];
     if(!self.wantsConnection)return;NSTimeInterval delay=MIN(30,pow(2,MIN(self.reconnectAttempt++,5)));
     __weak typeof(self) weakSelf=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_SEC)),dispatch_get_main_queue(),^{if(weakSelf.wantsConnection&&weakSelf.generation==generation)[weakSelf connect];});

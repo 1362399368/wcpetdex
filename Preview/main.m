@@ -46,6 +46,7 @@
 #import "WPRecovery124Checks.h"
 #import "WPCoupleRecovery124Checks.h"
 #import "WPRecoveryNotify124Checks.h"
+#import "WPWorkCheckinReminder.h"
 #import <dlfcn.h>
 @interface WPCoupleClient (WPPreviewProtocol)
 - (void)handle:(NSDictionary *)event generation:(NSUInteger)generation;
@@ -53,6 +54,10 @@
 
 @interface WPPartnerPickerController (WPPreviewSelection)
 - (void)cancelLoading;
+@end
+
+@interface WPWorkCheckinReminder (WPPreviewSchedule)
+- (NSUInteger)secondForDay:(NSString *)day;
 @end
 
 @protocol WPPreviewOverlay <NSObject>
@@ -149,6 +154,35 @@ static UILabel *WPPreviewLabelWithText(UIView *root, NSString *text){
     void (*runUnreadAvatar)(UIWindow *,void (^)(NSDictionary *))=dlsym(RTLD_DEFAULT,"WPUnreadAvatarRunPreviewTests");
     if(installSessions)installSessions();
     WPStartPlugin();
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--work-checkin-self-test"]){
+        NSDateFormatter *format=[NSDateFormatter new];format.locale=[NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        format.timeZone=[NSTimeZone timeZoneWithName:@"Asia/Shanghai"];format.dateFormat=@"yyyy-MM-dd HH:mm:ss";
+        BOOL (^within)(NSString *)=^BOOL(NSString *stamp){return [WPWorkCheckinReminder isWithinSendWindowAtDate:[format dateFromString:stamp]];};
+        id oldSlot=[WPPreferences() objectForKey:@"workCheckinSlot"];
+        id oldEnabled=[WPPreferences() objectForKey:@"workCheckinEnabled"];
+        [WPPreferences() removeObjectForKey:@"workCheckinSlot"];
+        [WPPreferences() removeObjectForKey:@"workCheckinEnabled"];
+        NSUInteger first=[WPWorkCheckinReminder.sharedReminder secondForDay:@"2030-01-07"];
+        NSUInteger again=[WPWorkCheckinReminder.sharedReminder secondForDay:@"2030-01-07"];
+        NSMutableDictionary *results=[@{
+            @"weekdayBeforeWindowRejected":@(!within(@"2026-10-26 08:49:59")),
+            @"weekdayStartAccepted":@(within(@"2026-10-26 08:50:00")),
+            @"weekdayLastSecondAccepted":@(within(@"2026-10-26 08:54:59")),
+            @"weekdayEndRejected":@(!within(@"2026-10-26 08:55:00")),
+            @"saturdayRejected":@(!within(@"2026-10-31 08:52:00")),
+            @"sundayRejected":@(!within(@"2026-11-01 08:52:00")),
+            @"dailySlotSavedAndBounded":@(first==again && first<290),
+            @"defaultEnabled":@([WPWorkCheckinReminder isEnabled])
+        } mutableCopy];
+        [WPPreferences() setBool:NO forKey:@"workCheckinEnabled"];
+        results[@"disableSwitchWorks"]=@(![WPWorkCheckinReminder isEnabled]);
+        if(oldSlot)[WPPreferences() setObject:oldSlot forKey:@"workCheckinSlot"];else [WPPreferences() removeObjectForKey:@"workCheckinSlot"];
+        if(oldEnabled)[WPPreferences() setObject:oldEnabled forKey:@"workCheckinEnabled"];else [WPPreferences() removeObjectForKey:@"workCheckinEnabled"];
+        BOOL passed=YES;for(NSNumber *value in results.allValues)passed&=value.boolValue;
+        NSDictionary *report=@{@"caseCount":@(results.count),@"allPassed":@(passed),@"results":results,@"finished":@YES};
+        [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil]
+            writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"work-checkin-report.json"] atomically:YES];
+    }
     if([NSProcessInfo.processInfo.arguments containsObject:@"--unified-dock-self-test"])dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{
         WPUnifiedDock122RunPreviewChecks(self.window,[self overlay],^(NSDictionary *results){
             BOOL all=YES;for(id value in results.allValues)if([value isKindOfClass:NSNumber.class])all&=[value boolValue];

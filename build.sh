@@ -4,14 +4,19 @@ cd "$(dirname "$0")"
 MODE="${1:-device}"
 EDITION="${2:-personal}"
 if [[ "$EDITION" != personal ]]; then echo 'this source package builds the personal edition only' >&2; exit 2; fi
+# Never package an opt-in diagnostic endpoint in a device release.
+if [[ "$MODE" == device && -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then
+  echo 'Release build blocked: unset WP_RUNTIME_DIAGNOSTIC_URL before packaging.' >&2
+  exit 3
+fi
 mkdir -p build
 SOURCES=(Sources/*.m)
-VERSION=1.2.6
-RELEASE_TAG=1.2.6
-BUILD_NUMBER=1207
+VERSION=1.2.8
+RELEASE_TAG=1.2.8
+BUILD_NUMBER=1209
 EDITION_DEFINE=0
 EDITION_LABEL=周游专属包
-EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.2.6"')
+EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.2.8"')
 if [[ -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then EXTRA+=("-DWP_RUNTIME_DIAGNOSTIC_URL=@\"${WP_RUNTIME_DIAGNOSTIC_URL}\""); fi
 COMMON=(-fobjc-arc -fblocks -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -ISources -framework UIKit -framework Foundation -framework QuartzCore -framework CoreGraphics -framework ImageIO -framework Security -framework UniformTypeIdentifiers -lz)
 BACKEND_CONFIG="${WP_BACKEND_CONFIG:-Config/backend.example.json}"

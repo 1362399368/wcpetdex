@@ -6,6 +6,7 @@
 #import "WPActionAdapter.h"
 #import "WPCoupleClient.h"
 #import "WPPartnerContact.h"
+#import "WPWorkCheckinReminder.h"
 #import "WPCoupleHistory.h"
 #import "WPInteractionLog.h"
 #import "WPShakeDetector.h"
@@ -931,6 +932,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 @property(nonatomic) BOOL maintenanceReady;
 @property(nonatomic) NSUInteger preparedGeneration;
 @property(nonatomic) NSMutableSet<NSString *> *degradedFeatures;
+- (void)sendWorkCheckinText:(NSString *)text completion:(void (^)(BOOL,NSString *))completion;
 @end
 
 @implementation WPOverlayManager
@@ -952,6 +954,10 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     [center addObserver:self selector:@selector(previewMiss:) name:@"WeChatPet.PreviewMissYou" object:nil];
     [center addObserver:self selector:@selector(performAction:) name:@"WeChatPet.PerformAction" object:nil];
     [center addObserver:self selector:@selector(updateQuickChat) name:WPSettingsDidChangeNotification object:nil];
+    __weak typeof(self) weakSelf=self;
+    [WPWorkCheckinReminder.sharedReminder startWithSender:^(NSString *message,void (^completion)(BOOL,NSString *)){
+        [weakSelf sendWorkCheckinText:message completion:completion];
+    }];
     // Source health is observational. Re-entering setActive from its synchronous
     // health notification can recursively install a missing private hook.
     [self refresh];
@@ -1058,11 +1064,13 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
             for(UIScene *scene in UIApplication.sharedApplication.connectedScenes)if(scene!=notification.object && scene.activationState==UISceneActivationStateForegroundActive)return;
         }
         [self.recovery setTemporarilySuspended:YES];WPQuickChatSetForegroundAvailable(NO);WPSESetForegroundAvailable(NO);[WPMessageBarrageSource.sharedSource setForegroundAvailable:NO];
+        [WPWorkCheckinReminder.sharedReminder setForegroundAvailable:NO];
         for(WPOverlayController *controller in [self controllers]){controller.barrage.temporarilySuspended=YES;[controller.pet setAnimationActive:NO];}
         return;
     }
     if([self applicationIsAvailable] && !self.recoveryPaused){
         self.foreground=YES;WPQuickChatSetForegroundAvailable(YES);WPSESetForegroundAvailable(YES);[WPMessageBarrageSource.sharedSource setForegroundAvailable:YES];
+        [WPWorkCheckinReminder.sharedReminder setForegroundAvailable:YES];
         BOOL resumed=self.recovery.temporarilySuspended;
         if(!self.recovery.foreground){[self.degradedFeatures removeAllObjects];[self.recovery beginForeground];}
         else [self.recovery setTemporarilySuspended:NO];
@@ -1209,6 +1217,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 }
 - (void)background:(NSNotification *)note {
     [self.recovery endForeground];self.captureReady=self.rendererReady=self.monitorReady=self.maintenanceReady=NO;
+    [WPWorkCheckinReminder.sharedReminder setForegroundAvailable:NO];
     self.foreground=NO;WPQuickChatSetForegroundAvailable(NO);WPSESetForegroundAvailable(NO);[WPMessageBarrageSource.sharedSource setForegroundAvailable:NO];[self updateQuickChat];[self.couple disconnect];
     for(WPOverlayWindow *window in self.windows.objectEnumerator){window.hidden=YES;[(WPOverlayController *)window.rootViewController releaseTransientViews];[((WPOverlayController *)window.rootViewController).pet setAnimationActive:NO];[((WPOverlayController *)window.rootViewController).unreadDot setActive:NO];}
     self.legacyWindow.hidden=YES;[(WPOverlayController *)self.legacyWindow.rootViewController releaseTransientViews];[((WPOverlayController *)self.legacyWindow.rootViewController).pet setAnimationActive:NO];[((WPOverlayController *)self.legacyWindow.rootViewController).unreadDot setActive:NO];
@@ -1267,6 +1276,16 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     WPOverlayController *controller=(id)[self activeWindow].rootViewController;
     controller.hostWindow=[self prepareChatHost:controller.hostWindow];
     [WPPartnerContact openSelectedConversationInWindow:controller.hostWindow completion:^(BOOL success,NSString *message){if(!success)[controller showMessage:message];}];
+}
+- (void)sendWorkCheckinText:(NSString *)text completion:(void (^)(BOOL,NSString *))completion {
+    if(self.recoveryPaused || self.settingsWindow || ![self applicationIsAvailable]){
+        completion(NO,@"微信页面暂不可用，稍后重试打卡提醒");return;
+    }
+    WPOverlayController *controller=(id)[self activeWindow].rootViewController;
+    UIWindow *host=controller.hostWindow;
+    if(!host || host.hidden)host=[self hostForScene:nil];
+    if(!host){completion(NO,@"未找到微信聊天窗口，稍后重试打卡提醒");return;}
+    [WPPartnerContact sendTextToSelectedPartner:text inWindow:host completion:completion];
 }
 - (void)previewMiss:(NSNotification *)note {
     WPOverlayWindow *window=[self activeWindow];

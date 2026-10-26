@@ -2,6 +2,17 @@
 
 This is a release-note summary, not reconstructed Git commit history. Original source snapshots did not contain a `.git` directory.
 
+## 1.2.8 (build 1209, 2026-10-26)
+
+- Added a weekday 08:50–08:55 China-time reminder to the selected partner's WeChat chat, with a saved random daily time, editable text, a settings switch, and an at-most-once native send attempt per day.
+- The reminder runs only while WeChat can execute in the foreground and opens the partner chat to send. Real-device delivery on the installed WeChat version remains to be checked.
+- Verified an arm64 device build, ad-hoc signature, package integrity, and nine simulator schedule checks covering weekdays, weekends, window edges, saved random time, and the enable switch.
+
+## 1.2.7 (build 1208, 2026-10-26)
+
+- Carried forward the independently built 1.2.7 source changes: clearer offline interaction status, bounded host recovery retry, safer single-flight partner chat navigation, and barrage overflow diagnostics.
+- Retained the release-build guard against packaging an optional diagnostic endpoint.
+
 ## 1.2.6 (build 1207, 2026-10-26)
 
 - Fixed the barrage metadata retry queue so an older retry cannot evict a newly received message when the 12-entry inbox is full.
