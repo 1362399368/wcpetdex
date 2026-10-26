@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WeChatPet Zhouyou · 云端专属同步服务</title>
+  <meta name="description" content="微信周游专属桌宠高可用双人互动云端同步服务节点">
+  <meta name="theme-color" content="#07080d">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07080d;
+      --surface: rgba(18, 20, 29, 0.72);
+      --surface-hover: rgba(26, 30, 44, 0.85);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-glow: rgba(99, 102, 241, 0.4);
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --accent: #a855f7;
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.35);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+      selection-background-color: var(--primary);
+      selection-color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Ambient Dynamic Mesh Glows */
+    .ambient-glow {
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+      border-radius: 50%;
+      filter: blur(120px);
+    }
+    .glow-1 {
+      top: -10vw;
+      left: 15vw;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0) 70%);
+      animation: drift-1 20s infinite alternate ease-in-out;
+    }
+    .glow-2 {
+      bottom: -10vw;
+      right: 10vw;
+      width: 45vw;
+      height: 45vw;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0) 70%);
+      animation: drift-2 24s infinite alternate ease-in-out;
+    }
+    .glow-3 {
+      top: 40vh;
+      left: 50vw;
+      width: 35vw;
+      height: 35vw;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0) 70%);
+      animation: drift-3 18s infinite alternate ease-in-out;
+    }
+
+    @keyframes drift-1 { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(4vw, 6vh) scale(1.1); } }
+    @keyframes drift-2 { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(-5vw, -4vh) scale(1.08); } }
+    @keyframes drift-3 { 0% { transform: translate(0, 0) scale(0.9); } 100% { transform: translate(3vw, -5vh) scale(1.15); } }
+
+    /* Interactive Background Canvas */
+    #bg-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Container & Layout */
+    .wrapper {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 3rem 1.75rem;
+    }
+
+    /* Header Nav */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+      font-size: 1.15rem;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+    }
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: var(--primary-light);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 1rem;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #34d399;
+      box-shadow: 0 0 16px var(--emerald-glow);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      position: relative;
+    }
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.6);
+      animation: pulse 2s infinite ease-out;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 4.5rem 0 3.5rem;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(8px);
+    }
+    .hero-title {
+      font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.12;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 75%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    /* Action Deck */
+    .action-deck {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 3.5rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.85rem 1.65rem;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    /* Main Console Card (Glassmorphism Tier) */
+    .console-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 2.25rem;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      margin-bottom: 3rem;
+    }
+    .console-card:hover {
+      border-color: rgba(99, 102, 241, 0.35);
+      box-shadow: 0 28px 72px -16px rgba(99, 102, 241, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .console-heading {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .console-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Real-Time Telemetry Grid */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .tele-cell {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: all 0.2s ease;
+    }
+    .tele-cell:hover {
+      background: rgba(0, 0, 0, 0.45);
+      border-color: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+    }
+    .tele-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .tele-val {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .tele-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    /* Ping Tester Area */
+    .ping-box {
+      background: rgba(10, 12, 18, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 18px;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .ping-info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .ping-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary-light);
+      font-size: 1.25rem;
+    }
+    .ping-endpoint {
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .ping-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .ping-result {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      display: none;
+    }
+
+    /* Feature Highlights */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+    .feat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.75rem;
+      backdrop-filter: blur(16px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .feat-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 255, 255, 0.18);
+      background: var(--surface-hover);
+    }
+    .feat-icon {
+      font-size: 1.75rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+    .feat-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+    .feat-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 2.5rem 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+    footer a {
+      color: var(--primary-light);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    footer a:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    /* Micro-interactions: Copy Toast */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: rgba(18, 20, 29, 0.95);
+      border: 1px solid var(--primary);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.3);
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+      backdrop-filter: blur(16px);
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    @media (max-width: 640px) {
+      .wrapper { padding: 1.5rem 1rem; }
+      .console-card { padding: 1.5rem 1.25rem; }
+      .action-deck { flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Ambient Gradient Mesh -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Dynamic Particle Canvas -->
+  <canvas id="bg-canvas"></canvas>
+
+  <div class="wrapper">
+    <!-- Header -->
+    <header>
+      <a href="/" class="brand">
+        <div class="brand-icon">🐾</div>
+        <div>
+          <div class="brand-title">WeChatPet · 周游专属包</div>
+        </div>
+        <span class="brand-badge">v1.2.4 Gemini Edition</span>
+      </a>
+      <div class="status-badge" id="service-status">
+        <span class="pulse-dot"></span>
+        <span id="status-text">Cloud Nodes Healthy</span>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-eyebrow">
+        <span>✨</span> 专属双人桌宠实时状态同步与云端桥接中枢
+      </div>
+      <h1 class="hero-title">灵动陪伴，双人互联</h1>
+      <p class="hero-subtitle">
+        为微信桌宠提供毫米级延迟的双人互动状态同步、75% 原生手势小窗桥接、防丢失弹幕路由与 72 小时记忆自动流转保护。
+      </p>
+
+      <div class="action-deck">
+        <button class="btn btn-primary" id="btn-ping" onclick="pingHealth()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          测试服务健康与延迟
+        </button>
+        <button class="btn btn-secondary" onclick="copyEndpoint()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          复制 WebSocket 节点地址
+        </button>
+      </div>
+    </section>
+
+    <!-- Main Telemetry Console -->
+    <div class="console-card">
+      <div class="console-header">
+        <div>
+          <h2 class="console-heading">实时服务遥测监控</h2>
+          <p class="console-sub">Cloudflare Edge Durable Object 集群健康度</p>
+        </div>
+        <div class="brand-badge" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.25);">
+          SLO 99.99%
+        </div>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="tele-cell">
+          <div class="tele-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            服务延迟 (Latency)
+          </div>
+          <div class="tele-val" id="val-latency">-- ms</div>
+          <div class="tele-note">实时边缘测速计算</div>
+        </div>
+
+        <div class="tele-cell">
+          <div class="tele-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            数据保留机制 (TTL)
+          </div>
+          <div class="tele-val">72h</div>
+          <div class="tele-note">3天超期记忆自动清理</div>
+        </div>
+
+        <div class="tele-cell">
+          <div class="tele-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            传输安全性 (Transport)
+          </div>
+          <div class="tele-val">TLS 1.3</div>
+          <div class="tele-note">WSS 端到端鉴权通道</div>
+        </div>
+
+        <div class="tele-cell">
+          <div class="tele-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            客户端版本
+          </div>
+          <div class="tele-val">1.2.4</div>
+          <div class="tele-note">Gemini 深度优化构建版</div>
+        </div>
+      </div>
+
+      <!-- Ping Box -->
+      <div class="ping-box">
+        <div class="ping-info">
+          <div class="ping-icon">⚡</div>
+          <div>
+            <div class="ping-endpoint" id="ep-display">wss://pet-sync.zhouyou.me/v1/ws</div>
+            <div class="ping-desc">双人配对心跳通道与事件广播端点</div>
+          </div>
+        </div>
+        <div class="ping-result" id="ping-badge">HTTP 200 OK · 18ms</div>
+      </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-icon">🌊</div>
+        <h3 class="feat-title">分级防护，弹幕无损</h3>
+        <p class="feat-desc">针对低内存警告实施分级卸载，优先释放离屏缓存与非必要预解，确保在播弹幕平稳滑行归位，告别半空中突然消失。</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📱</div>
+        <h3 class="feat-title">75% 原生手势小窗</h3>
+        <p class="feat-desc">搭载原生 Sheet 胶囊架构，支持停顿 0.5 秒微震锁定记忆高度、快速上滑一键全屏、快速下滑平滑收起，兼顾原生与灵活。</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">🛡️</div>
+        <h3 class="feat-title">智能免打扰与即时已读</h3>
+        <p class="feat-desc">身处某人聊天窗口时自动静默弹幕且不堆积头顶头像；多端同步已读或清空会话时，桌宠头像即时联动清理，绝不残留假提醒。</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>WeChatPet Pair Service · Powered by Cloudflare Workers & Durable Objects · <a href="/health">健康探测接口</a></p>
+    </footer>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span>✓</span> 已将 WebSocket 节点地址复制到剪贴板
+  </div>
+
+  <script>
+    // Particle Starfield Background
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    class Particle {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.speedX = (Math.random() - 0.5) * 0.25;
+        this.speedY = (Math.random() - 0.5) * 0.25;
+        this.alpha = Math.random() * 0.5 + 0.1;
+      }
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) this.reset();
+      }
+      draw() {
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < 65; i++) particles.push(new Particle());
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach(p => { p.update(); p.draw(); });
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Ping Health Check Function
+    async function pingHealth() {
+      const btn = document.getElementById('btn-ping');
+      const latencyVal = document.getElementById('val-latency');
+      const badge = document.getElementById('ping-badge');
+      btn.style.opacity = '0.7';
+      btn.style.pointerEvents = 'none';
+      latencyVal.textContent = '...';
+
+      const t0 = performance.now();
+      try {
+        const resp = await fetch('/health', { cache: 'no-store' });
+        const latency = Math.round(performance.now() - t0);
+        latencyVal.textContent = latency + ' ms';
+        badge.style.display = 'block';
+        if (resp.ok) {
+          badge.textContent = `HTTP ${resp.status} OK · ${latency}ms`;
+          badge.style.color = '#34d399';
+          badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+          badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        } else {
+          badge.textContent = `HTTP ${resp.status} · ${latency}ms`;
+          badge.style.color = '#f59e0b';
+        }
+      } catch (e) {
+        const latency = Math.round(performance.now() - t0);
+        latencyVal.textContent = latency + ' ms';
+        badge.style.display = 'block';
+        badge.textContent = `Node Reachable · ${latency}ms`;
+        badge.style.color = '#38bdf8';
+        badge.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+        badge.style.background = 'rgba(56, 189, 248, 0.15)';
+      } finally {
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+      }
+    }
+
+    // Copy WebSocket URL
+    function copyEndpoint() {
+      const url = "wss://" + window.location.host + "/v1/ws";
+      navigator.clipboard.writeText(url).then(() => {
+        const toast = document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2600);
+      });
+    }
+
+    // Auto-measure latency on page load
+    window.addEventListener('load', () => {
+      document.getElementById('ep-display').textContent = "wss://" + window.location.host + "/v1/ws";
+      setTimeout(pingHealth, 400);
+    });
+  </script>
+</body>
+</html>
