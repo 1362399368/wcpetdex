@@ -15,12 +15,20 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     return nil;
 }
 
+static BOOL WPContainsText(UIView *root, NSString *fragment) {
+    if ([root isKindOfClass:UILabel.class] && [((UILabel *)root).text containsString:fragment]) return YES;
+    if ([root isKindOfClass:UIButton.class] && [((UIButton *)root).currentTitle containsString:fragment]) return YES;
+    if ([root.accessibilityLabel containsString:fragment]) return YES;
+    for (UIView *child in root.subviews) if (WPContainsText(child, fragment)) return YES;
+    return NO;
+}
+
 @interface WPSinglePreviewHome : UIViewController
 @end
 @implementation WPSinglePreviewHome
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"SinglePet-zhour 测试";
+    self.title = @"zhour-single 测试";
     self.view.backgroundColor = UIColor.systemBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"桌宠设置" style:UIBarButtonItemStylePlain target:self action:@selector(settings)];
 }
@@ -94,11 +102,14 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     checks[@"gesturesNotDuplicatedInPetSettings"] = @(petSettings && !WPFindIdentifiedView(petSettings.view, @"WPLongPressAction") && !WPFindIdentifiedView(petSettings.view, @"WPShakeAction"));
     UIViewController *home = [NSClassFromString(@"WPSettingsController") new];
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
-    checks[@"pluginIntroductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction") != nil);
-    checks[@"telegramEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") != nil);
-    UIViewController *intro = [NSClassFromString(@"WPPluginIntroductionController") new];
-    intro.view.frame = self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
-    checks[@"telegramInIntroductionVisible"] = @(intro && WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup") != nil);
+    checks[@"telegramEntryAbsent"] = @(home && !WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") && !WPContainsText(home.view, @"Telegram"));
+    checks[@"versionDiagnosticsSectionAbsent"] = @(home && !WPContainsText(home.view, @"版本与诊断") && !WPContainsText(home.view, @"导出适配诊断"));
+    checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, @"zhour-single"));
+    checks[@"introductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction"));
+    UIViewController *intro=[NSClassFromString(@"WPPluginIntroductionController") new];
+    intro.view.frame=self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
+    checks[@"introductionDoesNotContainTelegram"] = @(intro && !WPContainsText(intro.view, @"Telegram") && !WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup"));
+    checks[@"petRecoveryControlsVisible"] = @(petSettings && WPFindIdentifiedView(petSettings.view, @"WPRecoveryPauseControl") && WPFindIdentifiedView(petSettings.view, @"WPRecoveryRetryControl"));
     [checks addEntriesFromDictionary:WPCollectorPreviewChecks()];
     BOOL all = YES;
     for (NSNumber *value in checks.allValues) all &= value.boolValue;

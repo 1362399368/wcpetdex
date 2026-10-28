@@ -28,7 +28,7 @@ static BOOL sCollectorRegistrationInProgress;
 @implementation WPZhouyouPluginSettingsController
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title=@"SinglePet-zhour";
+    self.title=@"zhour-single";
     WPSettingsController *settings=[WPSettingsController new];
     __weak typeof(self) weakSelf=self;
     settings.onClose=^{ [weakSelf closeSettings]; };
@@ -102,7 +102,7 @@ static BOOL WPRegisterCollectorClass(Class collectorClass) {
         sCollectorRegistrationInProgress=YES;
         @try {
             ((void(*)(id,SEL,id,id,id))objc_msgSend)(manager,registration,
-                @"SinglePet-zhour",WPPluginVersion(),WPCollectorControllerName());
+                @"zhour-single",WPPluginVersion(),WPCollectorControllerName());
         } @finally {sCollectorRegistrationInProgress=NO;}
         // A void registration returning normally is the published success
         // contract. Class presence or a singleton alone never hides our row.
@@ -222,7 +222,7 @@ static id WPNewCell(Class cellClass, id controller) {
     if (WPMethodMatches(method, 5, '@') && WPArgumentMatches(method, 2, ":") &&
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@")) {
         return ((id (*)(id, SEL, SEL, id, id))objc_msgSend)(cellClass, selector,
-            action, controller, @"SinglePet-zhour");
+            action, controller, @"zhour-single");
     }
     selector = @selector(normalCellForSel:target:title:accessoryType:);
     method = class_getClassMethod(cellClass, selector);
@@ -230,7 +230,7 @@ static id WPNewCell(Class cellClass, id controller) {
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@") &&
         WPArgumentMatches(method, 5, "qiQI")) {
         return ((id (*)(id, SEL, SEL, id, id, NSInteger))objc_msgSend)(cellClass, selector,
-            action, controller, @"SinglePet-zhour", UITableViewCellAccessoryDisclosureIndicator);
+            action, controller, @"zhour-single", UITableViewCellAccessoryDisclosureIndicator);
     }
     return nil;
 }

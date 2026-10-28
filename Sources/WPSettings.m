@@ -30,23 +30,13 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
 }
 #pragma mark - Secondary pages
 
-static void WPOpenTelegramGroup(WPCardPageController *controller) {
-    NSURL *url=[NSURL URLWithString:@"https://t.me/+TdjkYED5H4Q3ZTdh"];
-    if(!url){[controller alert:@"群链接无法打开，请稍后重试。"];return;}
-    __weak WPCardPageController *weakController=controller;
-    [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success){
-        if(!success)dispatch_async(dispatch_get_main_queue(), ^{[weakController alert:@"无法打开 Telegram 群链接，请检查网络或稍后重试。"];});
-    }];
-}
-
 @interface WPPluginIntroductionController : WPCardPageController
 @end
 @implementation WPPluginIntroductionController
 - (void)viewDidLoad{self.title=@"插件介绍";[super viewDidLoad];}
 - (void)buildCards{
-    __weak typeof(self) weakSelf=self;
     UIStackView *intro=[self addCard];
-    [intro addArrangedSubview:WPThemeLabel(@"SinglePet-zhour",20,UIFontWeightSemibold,WPThemePrimaryText())];
+    [intro addArrangedSubview:WPThemeLabel(@"zhour-single",20,UIFontWeightSemibold,WPThemePrimaryText())];
     [intro addArrangedSubview:WPThemeLabel(@"一只陪你聊天的微信桌宠。默认形象是噜噜，可在桌宠库选择或导入喜欢的形象。",14,UIFontWeightRegular,WPThemeSecondaryText())];
     [self addSectionTitle:@"主要功能"];
     UIStackView *features=[self addCard];
@@ -55,11 +45,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     [features addArrangedSubview:[self rowWithTitle:@"桌宠与手势" detail:@"调整大小、位置和外观，自定义长按与摇晃的功能。" actionTitle:nil handler:nil]];
     [features addArrangedSubview:[self rowWithTitle:@"聊天参谋" detail:@"配置模型服务后，可在聊天中获取分析和回复建议。" actionTitle:nil handler:nil]];
     [self addNote:@"使用聊天参谋时，选取的聊天内容会发送给你配置的模型服务。"];
-    [self addSectionTitle:@"交流与反馈"];
-    UIStackView *community=[self addCard];
-    UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"加入群聊，交流使用体验和反馈问题。" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
-    group.accessibilityIdentifier=@"WPOpenTelegramGroup";[community addArrangedSubview:group];
-    [self addNote:@"点击后会跳转到 Telegram 邀请链接，具体加入方式由 Telegram 显示。"];
+
 }
 @end
 
@@ -264,6 +250,12 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         WPResetPositionAnchors();
         for(NSString *key in @[@"petSize",@"petOpacity"])[WPPreferences() removeObjectForKey:key];
         [NSNotificationCenter.defaultCenter postNotificationName:WPSelectedPetDidChangeNotification object:nil];changed();[weakSelf reloadCards];}]];
+    [self addSectionTitle:@"插件恢复"];
+    UIStackView *recovery=[self addCard];
+    UIView *pause=[self switchRowWithTitle:@"暂停插件浮层" detail:@"暂停桌宠、弹幕和快捷聊天" on:WPOverlayManager.sharedManager.recoveryPaused handler:^(BOOL paused){[WPOverlayManager.sharedManager setRecoveryPaused:paused];[weakSelf reloadCards];}];
+    pause.accessibilityIdentifier=@"WPRecoveryPauseControl";[recovery addArrangedSubview:pause];
+    UIView *retry=[self rowWithTitle:WPOverlayManager.sharedManager.recoveryPaused?@"恢复插件":@"重新恢复插件" detail:@"无需点击桌宠即可恢复" actionTitle:@"恢复" handler:^{if(WPOverlayManager.sharedManager.recoveryPaused)[WPOverlayManager.sharedManager setRecoveryPaused:NO];else [WPOverlayManager.sharedManager retryRecovery];[weakSelf reloadCards];}];
+    retry.accessibilityIdentifier=@"WPRecoveryRetryControl";[recovery addArrangedSubview:retry];
 }
 @end
 
@@ -361,7 +353,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 @end
 @implementation WPSettingsController
 - (void)viewDidLoad{
-    self.title=@"SinglePet-zhour";[super viewDidLoad];
+    self.title=@"zhour-single";[super viewDidLoad];
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc] initWithTitle:@"完成" style:UIBarButtonItemStyleDone target:self action:@selector(done)];
     for(NSString *name in @[WPSettingsDidChangeNotification])
         [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(reloadCards) name:name object:nil];
@@ -399,26 +391,14 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         }
         [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
     }
-    [self addSectionTitle:@"版本与诊断"];
     UIStackView *about=[self addCard];
-    UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"功能说明与 Telegram 交流" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
+    UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"了解桌宠功能" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
     intro.accessibilityIdentifier=@"WPPluginIntroduction";[about addArrangedSubview:intro];
-    UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"交流和问题反馈" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
-    group.accessibilityIdentifier=@"WPHomeTelegramGroup";[about addArrangedSubview:group];
-    NSString *wechat=[NSString stringWithFormat:@"%@ (%@)",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"未知"];
-    [about addArrangedSubview:[self rowWithTitle:@"微信版本" detail:wechat actionTitle:nil handler:nil]];
-    UIView *pause=[self switchRowWithTitle:@"暂停插件浮层" detail:@"暂停桌宠、弹幕和快捷聊天，方便排查页面操作卡住的问题" on:WPOverlayManager.sharedManager.recoveryPaused handler:^(BOOL paused){[WPOverlayManager.sharedManager setRecoveryPaused:paused];[weakSelf reloadCards];}];
-    pause.accessibilityIdentifier=@"WPRecoveryPauseControl";[about addArrangedSubview:pause];
-    UIView *retry=[self rowWithTitle:WPOverlayManager.sharedManager.recoveryPaused?@"恢复插件":@"重新恢复插件" detail:@"从微信设置也可进入这里恢复，无需点击桌宠" actionTitle:@"恢复" handler:^{if(WPOverlayManager.sharedManager.recoveryPaused)[WPOverlayManager.sharedManager setRecoveryPaused:NO];else [WPOverlayManager.sharedManager retryRecovery];[weakSelf reloadCards];}];
-    retry.accessibilityIdentifier=@"WPRecoveryRetryControl";[about addArrangedSubview:retry];
-    [about addArrangedSubview:[self rowWithTitle:@"导出适配诊断" detail:@"只含接口名和类型，不含聊天与联系人" actionTitle:@"导出" handler:^{[weakSelf exportDiagnostics];}]];
-    UILabel *version=WPThemeLabel([NSString stringWithFormat:@"版本 %@ · 构建 %d · %@",WPPluginVersion(),WP_BUILD_VERSION,WPEditionName()],12,UIFontWeightRegular,WPThemeSecondaryText());version.textAlignment=NSTextAlignmentCenter;
-    [self.stack addArrangedSubview:version];
 }
 - (UIView *)infoCard{
     UIView *card=[UIView new]; card.backgroundColor=WPThemeCard(); card.layer.cornerRadius=WPThemeCardRadius; card.layer.cornerCurve=kCACornerCurveContinuous;
     UIView *tile=WPThemeIconTile([UIImage systemImageNamed:@"pawprint.fill"],UIColor.systemOrangeColor,58);
-    UILabel *title=WPThemeLabel(@"SinglePet-zhour",17,UIFontWeightSemibold,WPThemePrimaryText());
+    UILabel *title=WPThemeLabel(@"zhour-single",17,UIFontWeightSemibold,WPThemePrimaryText());
     UILabel *detail=WPThemeLabel(@"噜噜陪你轻松聊天",12,UIFontWeightRegular,WPThemeSecondaryText());
     UIStackView *text=[[UIStackView alloc] initWithArrangedSubviews:@[title,detail]]; text.axis=UILayoutConstraintAxisVertical; text.spacing=7;
     UIStackView *row=[[UIStackView alloc] initWithArrangedSubviews:@[tile,text]]; row.axis=UILayoutConstraintAxisHorizontal; row.spacing=14; row.alignment=UIStackViewAlignmentCenter;
@@ -427,13 +407,5 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     return card;
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}
-- (void)exportDiagnostics {
-    NSMutableDictionary *report=[WPRuntimeDiagnostics() mutableCopy];
-    report[@"recovery"]=[WPOverlayManager.sharedManager recoveryDiagnostics];
-    report[@"pluginBuild"]=@(WP_BUILD_VERSION);
-    report[@"chatAdvisor"]=[WPChatAdvisor diagnostics];
-    report[@"resourceDirectoryFound"]=@([NSFileManager.defaultManager fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]);
-    NSURL *url=[NSURL fileURLWithPath:[WPDataDirectory() stringByAppendingPathComponent:@"diagnostics.json"]];[[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToURL:url atomically:YES];
-    UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];share.popoverPresentationController.sourceView=self.view;[self presentViewController:share animated:YES completion:nil];
-}
+
 @end
