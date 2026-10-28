@@ -22,6 +22,8 @@
 #import "WPQuickChatSettingsController.h"
 #import "WPQuickChatPreferences.h"
 #import "WPWorkCheckinReminder.h"
+#import "WPChatAdvisor.h"
+#import "WPChatAdvisorSettingsController.h"
 
 static NSString * const WPConnectionStatusChangedNotification=@"WeChatPet.ConnectionStatusChanged";
 /// Closes the plugin panel first so the action happens in WeChat below it.
@@ -171,7 +173,7 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
 - (UIView *)tapActionRowWithTitle:(NSString *)title doubleTap:(BOOL)doubleTap handler:(void (^)(WPTapAction))handler{
     UIStackView *column=[UIStackView new];column.axis=UILayoutConstraintAxisVertical;column.spacing=8;
     [column addArrangedSubview:WPThemeLabel(title,15,UIFontWeightMedium,WPThemePrimaryText())];
-    UISegmentedControl *choice=[[UISegmentedControl alloc] initWithItems:@[@"对象聊天",@"聊天浮窗",@"设置"]];
+    UISegmentedControl *choice=[[UISegmentedControl alloc] initWithItems:@[@"对象聊天",@"聊天浮窗",@"设置",@"聊天参谋"]];
     choice.selectedSegmentIndex=WPConfiguredTapAction(doubleTap);
     choice.accessibilityLabel=title;
     choice.accessibilityIdentifier=doubleTap?@"WPTapActionDouble":@"WPTapActionSingle";
@@ -198,12 +200,14 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
         [tapActions addArrangedSubview:[self tapActionRowWithTitle:doubleTap?@"双击桌宠":@"单击桌宠" doubleTap:doubleTap handler:^(WPTapAction action){
             if(action==WPTapActionQuickChat && !WPQuickChatEnabled())
                 [WPPreferences() setBool:YES forKey:@"quickChatEnabled"];
+            if(action==WPTapActionChatAdvisor && !WPChatAdvisor.isReady)
+                [weakSelf alert:@"已设为聊天参谋。还需要在设置首页的「聊天参谋」里填写 API Key 并启用。"];
             WPSetConfiguredTapAction(doubleTap,action);
             changed();[weakSelf reloadCards];
         }]];
     }
     [tapActions addArrangedSubview:[self switchRowWithTitle:@"贴边时直接执行点击动作" detail:@"单击和双击直接执行上方设置；关闭时先展开桌宠" on:WPQuickChatOptionBool(@"edgeTapActions") handler:^(BOOL on){WPQuickChatSetOption(@"edgeTapActions",@(on));}]];
-    [self addNote:@"单击和双击可分别选择动作；选择聊天浮窗时会自动开启便捷聊天。"];
+    [self addNote:@"单击和双击可分别选择动作；选择聊天浮窗时会自动开启便捷聊天；聊天参谋需要先打开一个聊天。"];
     [self addSectionTitle:@"便捷聊天"];
     BOOL enabled=WPQuickChatEnabled();
     UIStackView *quick=[self addCard];
@@ -442,7 +446,8 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
         @[@"快捷功能",@"一键已读 · 朋友圈",[UIImage systemImageNamed:@"bolt.fill"],UIColor.systemYellowColor,^{[weakSelf push:[WPQuickActionsController new]];}],
         @[@"桌宠设置",@"外观、切换桌宠与手势",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
         @[@"配对与连接",@"服务地址与本机令牌",[UIImage systemImageNamed:@"link"],UIColor.systemGreenColor,^{[weakSelf push:[WPConnectionSettingsController new]];}],
-        @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}]];
+        @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}],
+        @[@"聊天参谋",WPChatAdvisor.isReady?@"意图分析 · 建议回复":@"接入硅基流动后使用",[UIImage systemImageNamed:@"sparkles"],UIColor.systemPurpleColor,^{[weakSelf push:[WPChatAdvisorSettingsController new]];}]];
     NSUInteger columns=self.view.bounds.size.width>0 && self.view.bounds.size.width<340?1:2;
     for(NSUInteger start=0;start<features.count;start+=columns){
         UIStackView *line=[UIStackView new];line.axis=UILayoutConstraintAxisHorizontal;line.spacing=12;line.distribution=UIStackViewDistributionFillEqually;line.alignment=UIStackViewAlignmentFill;
@@ -509,6 +514,7 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
     report[@"recovery"]=[WPOverlayManager.sharedManager recoveryDiagnostics];
     if(WPOverlayManager.sharedManager.recoveryMaintenanceReady)report[@"interactionHistory"]=WPCoupleHistory.sharedHistory.diagnostics;
     report[@"pluginBuild"]=@(WP_BUILD_VERSION);
+    report[@"chatAdvisor"]=[WPChatAdvisor diagnostics];
     report[@"resourceBundleFound"]=@([WPResourceBundle().bundleURL.lastPathComponent isEqualToString:@"WeChatPet.bundle"]);
     NSURL *url=[NSURL fileURLWithPath:[WPDataDirectory() stringByAppendingPathComponent:@"diagnostics.json"]];[[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToURL:url atomically:YES];
     UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];share.popoverPresentationController.sourceView=self.view;[self presentViewController:share animated:YES completion:nil];

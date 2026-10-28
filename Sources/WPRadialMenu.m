@@ -2,6 +2,7 @@
 #import "WPCommon.h"
 #import "WPMenuIcons.h"
 #import "WPEdition.h"
+#import "WPChatAdvisor.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 #import <float.h>
@@ -23,9 +24,9 @@
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _actionIdentifier = [action copy];
-    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"miss":@"松手告诉对方「想你了」", @"anger":@"松手告诉对方「生气了」", @"read":@"松手将所有会话标为已读"}[action] ?: title;
+    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"miss":@"松手告诉对方「想你了」", @"anger":@"松手告诉对方「生气了」", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天"}[action] ?: title;
     self.accessibilityLabel = title;
-    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"miss":@"向对方发送想你了互动", @"anger":@"向对方发送生气了互动", @"read":@"将所有会话标为已读"}[action] ?: title;
+    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"miss":@"向对方发送想你了互动", @"anger":@"向对方发送生气了互动", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
     self.isAccessibilityElement = YES;
     self.backgroundColor = UIColor.clearColor;
@@ -100,7 +101,8 @@
         [[WPMenuActionButton alloc] initWithAction:@"moments" title:@"朋友圈" symbol:@"camera.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"miss" title:@"想你了" symbol:@"heart.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"anger" title:@"生气了" symbol:@"heart.slash.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"read" title:@"全部已读" symbol:@"checkmark.circle.fill"]
+        [[WPMenuActionButton alloc] initWithAction:@"read" title:@"全部已读" symbol:@"checkmark.circle.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"advisor" title:@"参谋" symbol:@"sparkles"]
     ];
     for (WPMenuActionButton *button in _allButtons) {
         [button addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -255,9 +257,12 @@ static WPFanLayout WPComputeFanLayout(CGPoint anchor, CGRect safe, CGFloat scale
 
 - (void)updateActionButtons {
     NSMutableArray *visible=[NSMutableArray new];
+    // The advisor item appears only after a key is saved and the switch is on.
+    BOOL advisor=WPChatAdvisor.isReady;
     for(WPMenuActionButton *button in _allButtons){
-        button.hidden=NO;
-        [visible addObject:button];
+        BOOL show=advisor || ![button.actionIdentifier isEqualToString:@"advisor"];
+        button.hidden=!show;
+        if(show)[visible addObject:button];
     }
     _actionButtons = visible;
     self.accessibilityElements = _actionButtons;
