@@ -2,7 +2,6 @@
 #import "WPQuickChat.h"
 #import "WPMessageBarrageSource.h"
 #import "WPActionAdapter.h"
-#import "WPBackendConfiguration.h"
 #import <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -13,13 +12,13 @@ NSString * const WPSelectedPetDidChangeNotification = @"WeChatPet.SelectedPetDid
 NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange";
 
 NSBundle *WPResourceBundle(void) {
-    NSURL *url = [[NSBundle mainBundle] URLForResource:@"WeChatPet" withExtension:@"bundle"];
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"zhour-single" withExtension:@"bundle"];
     if (url) return [NSBundle bundleWithURL:url];
     Dl_info info;
     if (dladdr((const void *)&WPResourceBundle, &info) && info.dli_fname) {
         NSString *dir = [[NSString stringWithUTF8String:info.dli_fname] stringByDeletingLastPathComponent];
-        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"WeChatPet.bundle"],
-                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"WeChatPet.bundle"]]) {
+        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"zhour-single.bundle"],
+                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"zhour-single.bundle"]]) {
             NSBundle *bundle = [NSBundle bundleWithPath:candidate];
             if (bundle) return bundle;
         }
@@ -35,18 +34,16 @@ NSUserDefaults *WPPreferences(void) {
     static NSUserDefaults *defaults;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        defaults = [[NSUserDefaults alloc] initWithSuiteName:@"dev.zhour.wechatpet"];
-        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @NO, @"quickChatFlash": @YES,
-            @"unreadAvatarEnabled":@YES,@"unreadAvatarOffsetX":@0,@"unreadAvatarOffsetY":@0,
-            @"interactionBadgeOffsetX":@0,@"interactionBadgeOffsetY":@0} mutableCopy];
-        NSString *backend=WPDefaultCoupleURLString();if(backend.length)registered[@"coupleURL"]=backend;
+        defaults = [[NSUserDefaults alloc] initWithSuiteName:@"dev.zhour.wechatpet.single"];
+        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @YES, @"quickChatFlash": @YES,
+            @"unreadAvatarEnabled":@YES,@"unreadAvatarOffsetX":@0,@"unreadAvatarOffsetY":@0} mutableCopy];
         [defaults registerDefaults:registered];
     });
     return defaults;
 }
 
 NSString *WPDataDirectory(void) {
-    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"WeChatPet"];
+    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"WeChatPetSingle"];
     [[NSFileManager defaultManager] createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
     return path;
 }

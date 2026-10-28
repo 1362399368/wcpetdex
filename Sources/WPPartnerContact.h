@@ -2,9 +2,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 @interface WPPartnerContact : NSObject
-+ (NSString *)selectedDisplayName;
-+ (void)openSelectedConversationInWindow:(nullable UIWindow *)window
-                             completion:(void (^)(BOOL success, NSString *message))completion;
 /// Opens any session (friend or group) through the same guarded WeChat route.
 + (void)openConversationWithUsername:(NSString *)username inWindow:(nullable UIWindow *)window
                           completion:(void (^)(BOOL success, NSString *message))completion;
@@ -15,16 +12,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Display name from CContactMgr for any session username; empty when unknown.
 + (NSString *)displayNameForUsername:(NSString *)username;
 + (nullable UIViewController *)visibleController:(nullable UIViewController *)controller;
-/// Opens the selected partner's native chat and invokes WeChat's text-send path.
-/// Completion means the native method was invoked, not that WeChat confirmed delivery.
-+ (void)sendTextToSelectedPartner:(NSString *)text inWindow:(nullable UIWindow *)window
-                      completion:(void (^)(BOOL invoked, NSString *message))completion;
 @end
 
-/// Searches local WeChat friends in the plugin's own picker and saves only
-/// the selected username/display name on this device.
+/// Searches local WeChat friends and returns the selected contact to the caller.
 @interface WPPartnerPickerController : UITableViewController
-/// Optional reuse for local selection lists; leaves the paired partner intact.
+/// Invoked after choosing a contact.
 @property(nonatomic,copy,nullable) void (^selectionHandler)(NSString *username, NSString *displayName);
 @property(nonatomic,copy,nullable) NSString *pickerTitle;
 @end

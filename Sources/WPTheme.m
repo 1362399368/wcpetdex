@@ -194,7 +194,7 @@ UILabel *WPThemeLabel(NSString *text,CGFloat size,UIFontWeight weight,UIColor *c
 }
 - (void)alert:(NSString *)message{
     if(self.presentedViewController)return;
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"双人桌宠" message:message preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"zhour-single" message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];[self presentViewController:alert animated:YES completion:nil];
 }
 @end

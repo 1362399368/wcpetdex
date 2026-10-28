@@ -18,15 +18,15 @@
 @end
 
 @implementation WPMenuActionButton
-- (BOOL)sendDisabled{return WPCanUsePrivateFeatures() && [WPPreferences() boolForKey:@"stealthEnabled"] && [@[@"miss",@"anger"] containsObject:self.actionIdentifier];}
+- (BOOL)sendDisabled{return NO;}
 
 - (instancetype)initWithAction:(NSString *)action title:(NSString *)title symbol:(NSString *)symbol {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _actionIdentifier = [action copy];
-    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"miss":@"松手告诉对方「想你了」", @"anger":@"松手告诉对方「生气了」", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天"}[action] ?: title;
+    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天"}[action] ?: title;
     self.accessibilityLabel = title;
-    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"miss":@"向对方发送想你了互动", @"anger":@"向对方发送生气了互动", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
+    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"quickChat":@"打开快捷聊天", @"settings":@"打开桌宠设置", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
     self.isAccessibilityElement = YES;
     self.backgroundColor = UIColor.clearColor;
@@ -37,8 +37,7 @@
     UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:23 weight:UIImageSymbolWeightSemibold];
     _symbolView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbol withConfiguration:configuration]];
     if([action isEqualToString:@"moments"])_symbolView.image=WPMomentsMenuIcon();
-    if([action isEqualToString:@"anger"])_symbolView.image=WPBrokenHeartMenuIcon();
-    _symbolView.tintColor = [action isEqualToString:@"miss"] ? UIColor.systemPinkColor : ([action isEqualToString:@"anger"] ? UIColor.systemGrayColor : UIColor.labelColor);
+    _symbolView.tintColor = UIColor.labelColor;
     _symbolView.contentMode = UIViewContentModeScaleAspectFit;
     _symbolView.userInteractionEnabled = NO;
     _symbolView.isAccessibilityElement = NO;
@@ -64,7 +63,7 @@
     _menuSelected = selected;
     self.backgroundColor = UIColor.clearColor;
     self.layer.borderWidth = 0;
-    _symbolView.tintColor = self.sendDisabled ? UIColor.blackColor : ([self.actionIdentifier isEqualToString:@"miss"] ? UIColor.systemPinkColor : ([self.actionIdentifier isEqualToString:@"anger"] ? UIColor.systemGrayColor : (selected ? UIColor.systemBlueColor : UIColor.labelColor)));
+    _symbolView.tintColor = selected ? UIColor.systemBlueColor : UIColor.labelColor;
     _symbolView.transform = selected ? CGAffineTransformMakeScale(1.18, 1.18) : CGAffineTransformIdentity;
     self.accessibilityTraits = UIAccessibilityTraitButton | (selected ? UIAccessibilityTraitSelected : 0) | (self.sendDisabled ? UIAccessibilityTraitNotEnabled : 0);
 }
@@ -99,8 +98,8 @@
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _allButtons = @[
         [[WPMenuActionButton alloc] initWithAction:@"moments" title:@"朋友圈" symbol:@"camera.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"miss" title:@"想你了" symbol:@"heart.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"anger" title:@"生气了" symbol:@"heart.slash.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"quickChat" title:@"快捷聊天" symbol:@"bubble.left.and.bubble.right.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"settings" title:@"设置" symbol:@"gearshape.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"read" title:@"全部已读" symbol:@"checkmark.circle.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"advisor" title:@"参谋" symbol:@"sparkles"]
     ];

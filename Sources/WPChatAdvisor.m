@@ -31,8 +31,6 @@ static NSString *WPCAClip(NSString *value,NSUInteger limit) {
 + (NSArray<WPChatAdvisorPreset *> *)builtinPresets {
     static NSArray *presets;static dispatch_once_t once;
     dispatch_once(&once,^{presets=@[
-        [self presetWithIdentifier:@"couple" title:@"恋爱聊天" summary:@"对象或暧昧对象，读情绪、给回应感"
-                       instruction:@"对方是恋人或暧昧对象。重点读出对方的情绪，以及想要的回应：陪伴、被在乎、被哄还是单纯分享。回复温柔自然、有回应感，不油腻、不说教、不敷衍。"],
         [self presetWithIdentifier:@"friend" title:@"朋友日常" summary:@"熟人闲聊，轻松接话"
                        instruction:@"对方是朋友或熟人，以日常闲聊为主。回复轻松、口语化，可以接梗，不过度解读，也不要太客气。"],
         [self presetWithIdentifier:@"work" title:@"职场沟通" summary:@"同事、上级、客户，分清派活和催进度"
@@ -110,7 +108,7 @@ static NSString *WPCALastRoute,*WPCALastFailure;
 static NSString *WPCAPreviewKey;
 #endif
 static NSDictionary *WPCAKeyQuery(void) {
-    return @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:@"dev.zhour.wechatpet.chat-advisor",(__bridge id)kSecAttrAccount:@"api-key"};
+    return @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:@"dev.zhour.wechatpet.single.chat-advisor",(__bridge id)kSecAttrAccount:@"api-key"};
 }
 static NSString *WPCALoadKey(void) {
     NSMutableDictionary *query=WPCAKeyQuery().mutableCopy;query[(__bridge id)kSecReturnData]=@YES;query[(__bridge id)kSecMatchLimit]=(__bridge id)kSecMatchLimitOne;
