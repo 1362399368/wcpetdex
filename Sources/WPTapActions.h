@@ -6,6 +6,7 @@ typedef NS_ENUM(NSInteger, WPTapAction) {
     WPTapActionPartnerChat = 0,
     WPTapActionQuickChat = 1,
     WPTapActionSettings = 2,
+    WPTapActionChatAdvisor = 3,
 };
 
 /// Migrate the 0.4.x single-tap behavior once, then keep the gesture independent of the switch.

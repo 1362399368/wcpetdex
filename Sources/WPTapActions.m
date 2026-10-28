@@ -10,6 +10,7 @@ static NSString *WPTapActionValue(WPTapAction action) {
         case WPTapActionPartnerChat: return @"partnerChat";
         case WPTapActionQuickChat: return @"quickChat";
         case WPTapActionSettings: return @"settings";
+        case WPTapActionChatAdvisor: return @"chatAdvisor";
     }
     return nil;
 }
@@ -32,6 +33,7 @@ WPTapAction WPConfiguredTapAction(BOOL doubleTap) {
         if ([value isEqualToString:@"partnerChat"]) return WPTapActionPartnerChat;
         if ([value isEqualToString:@"quickChat"]) return WPTapActionQuickChat;
         if ([value isEqualToString:@"settings"]) return WPTapActionSettings;
+        if ([value isEqualToString:@"chatAdvisor"]) return WPTapActionChatAdvisor;
     }
     return doubleTap ? WPTapActionSettings : WPTapActionPartnerChat;
 }
