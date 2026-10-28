@@ -1,5 +1,6 @@
 #import "WPCatalogController.h"
 #import "WPPetCatalog.h"
+#import "WPPetRanking.h"
 #import "WPPetImporter.h"
 #import "WPPagedPet.h"
 #import "WPCommon.h"
@@ -104,6 +105,7 @@ static NSString *WPCDigest(NSString *text) {
 @property(nonatomic,strong) NSMutableDictionary<NSString *,void (^)(UIImage *)> *callbacks;
 @property(nonatomic) BOOL active;
 @property(nonatomic) BOOL decoding;
+@property(nonatomic) BOOL loadedFromDisk;
 @end
 @implementation WPCThumbnailJob
 - (instancetype)init {if((self=[super init]))_outputFile=-1;return self;}
@@ -126,7 +128,7 @@ static NSString *WPCDigest(NSString *text) {
 - (void)dealloc {[self removeTemporaryFile];}
 @end
 
-/// Only visible cells request images. Two decodes/downloads run at once; reused cells cancel.
+/// Downloads use a small bounded pool; image decoding remains serial.
 @interface WPCThumbnailLoader : NSObject <NSURLSessionDataDelegate>
 @property(nonatomic,strong) NSURLSession *session;
 @property(nonatomic,strong) dispatch_queue_t decodeQueue;
@@ -155,7 +157,7 @@ static NSString *WPCDigest(NSString *text) {
         _savedPath=[WPDataDirectory() stringByAppendingPathComponent:@"SavedThumbnails"];
         [NSFileManager.defaultManager createDirectoryAtPath:_savedPath withIntermediateDirectories:YES attributes:nil error:nil];
         NSURLSessionConfiguration *config=NSURLSessionConfiguration.ephemeralSessionConfiguration;
-        config.timeoutIntervalForRequest=20;config.timeoutIntervalForResource=45;config.HTTPMaximumConnectionsPerHost=2;
+        config.timeoutIntervalForRequest=20;config.timeoutIntervalForResource=45;config.HTTPMaximumConnectionsPerHost=4;
         // The small first-frame PNG is already persisted below. Do not also
         // retain the original multi-megabyte atlas in a shared HTTP cache.
         config.URLCache=nil;config.HTTPCookieStorage=nil;config.requestCachePolicy=NSURLRequestReloadIgnoringLocalCacheData;
@@ -223,13 +225,14 @@ static NSString *WPCDigest(NSString *text) {
     return NO;
 }
 - (void)startPending {
-    while(self.activeCount<2 && self.pending.count){WPCThumbnailJob *job=self.pending.firstObject;[self.pending removeObjectAtIndex:0];if(!job.callbacks.count)continue;job.active=YES;job.decoding=YES;self.activeCount++;
+    while(self.activeCount<4 && self.pending.count){WPCThumbnailJob *job=self.pending.firstObject;[self.pending removeObjectAtIndex:0];if(!job.callbacks.count)continue;job.active=YES;job.decoding=YES;self.activeCount++;
         dispatch_async(self.decodeQueue,^{
             @autoreleasepool {
             UIImage *cached=[UIImage imageWithContentsOfFile:job.diskPath];
             UIImage *local=(!cached && job.localPath.length)?WPCCropFirstFrame([NSData dataWithContentsOfFile:job.localPath options:NSDataReadingMappedIfSafe error:nil]):nil;
             dispatch_async(dispatch_get_main_queue(),^{
                 if(![self settleDecode:job])return;
+                job.loadedFromDisk=cached!=nil;
                 if(cached || job.localPath.length){[self finish:job image:cached?:local];return;}
                 job.task=[self.session dataTaskWithURL:job.url];self.tasks[@(job.task.taskIdentifier)]=job;[job.task resume];
             });
@@ -242,7 +245,7 @@ static NSString *WPCDigest(NSString *text) {
     [self.jobs removeObjectForKey:job.key];[self.tasks removeObjectForKey:@(job.task.taskIdentifier)];
     [job removeTemporaryFile];job.task=nil;
     if(job.active){job.active=NO;if(self.activeCount)self.activeCount--;}
-    if(image){size_t cost=image.CGImage?CGImageGetBytesPerRow(image.CGImage)*CGImageGetHeight(image.CGImage):0;[self.images setObject:image forKey:job.key cost:cost];dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{@autoreleasepool {[UIImagePNGRepresentation(image) writeToFile:job.diskPath atomically:YES];}});}
+    if(image){size_t cost=image.CGImage?CGImageGetBytesPerRow(image.CGImage)*CGImageGetHeight(image.CGImage):0;[self.images setObject:image forKey:job.key cost:cost];if(!job.loadedFromDisk)dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{@autoreleasepool {[UIImagePNGRepresentation(image) writeToFile:job.diskPath atomically:YES];}});}
     NSArray *tokens=job.callbacks.allKeys;for(NSString *token in tokens){void(^callback)(UIImage *)=job.callbacks[token];[self.subscriptions removeObjectForKey:token];callback(image);}
     [job.callbacks removeAllObjects];[self startPending];
 }
@@ -271,6 +274,7 @@ static NSString *WPCDigest(NSString *text) {
 @property(nonatomic,strong) UIButton *useButton;
 @property(nonatomic,strong) UIActivityIndicatorView *spinner;
 @property(nonatomic,copy) NSString *representedKey;
+@property(nonatomic,copy) NSString *previewSource;
 @property(nonatomic,copy) NSString *imageToken;
 @property(nonatomic,copy) dispatch_block_t action;
 @end
@@ -292,7 +296,7 @@ static NSString *WPCDigest(NSString *text) {
     self.nameLabel.frame=CGRectMake(12,161,width-24,43);self.authorLabel.frame=CGRectMake(12,208,width-24,20);
     self.useButton.frame=CGRectMake(12,height-50,width-24,38);self.spinner.center=CGPointMake(18,19);
 }
-- (void)prepareForReuse { [super prepareForReuse];[[WPCThumbnailLoader shared] cancel:self.imageToken];self.imageToken=nil;self.representedKey=nil;self.preview.image=nil;self.previewHint.hidden=NO;self.previewHint.text=@"加载预览…";self.action=nil;[self.spinner stopAnimating]; }
+- (void)prepareForReuse { [super prepareForReuse];[[WPCThumbnailLoader shared] cancel:self.imageToken];self.imageToken=nil;self.representedKey=nil;self.previewSource=nil;self.preview.image=nil;self.previewHint.hidden=NO;self.previewHint.text=@"加载预览…";self.action=nil;[self.spinner stopAnimating]; }
 - (void)use { if(self.action)self.action(); }
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {[super traitCollectionDidChange:previousTraitCollection];self.contentView.layer.borderColor=[UIColor.separatorColor resolvedColorWithTraitCollection:self.traitCollection].CGColor;}
 @end
@@ -315,6 +319,15 @@ static NSString *WPCDigest(NSString *text) {
 @property(nonatomic) BOOL previewsVisible;
 @property(nonatomic) BOOL previewsSuspended;
 @property(nonatomic) BOOL catalogLoading;
+@property(nonatomic,copy) NSArray<NSDictionary *> *rankingPets;
+@property(nonatomic,strong) NSError *rankingError;
+@property(nonatomic) BOOL rankingLoading;
+@property(nonatomic) BOOL rankingLoaded;
+@property(nonatomic) BOOL rankingCached;
+@property(nonatomic,copy) NSString *lastDisplayedSelection;
+@property(nonatomic,copy) NSSet<NSString *> *lastDisplayedDownloads;
+@property(nonatomic) NSInteger lastDisplayedSegment;
+@property(nonatomic) BOOL hasDisplayedResults;
 @end
 @implementation WPCatalogController
 - (void)viewDidLoad {
@@ -323,7 +336,7 @@ static NSString *WPCDigest(NSString *text) {
     self.navigationItem.leftBarButtonItem=[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"xmark"] style:UIBarButtonItemStylePlain target:self action:@selector(close)];
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"square.and.arrow.down"] style:UIBarButtonItemStylePlain target:self action:@selector(importPackage)];self.navigationItem.rightBarButtonItem.accessibilityLabel=@"导入桌宠包";
     self.searchBar=[UISearchBar new];self.searchBar.searchBarStyle=UISearchBarStyleMinimal;self.searchBar.placeholder=@"搜索名称或作者";self.searchBar.delegate=self;[self.view addSubview:self.searchBar];
-    self.segments=[[UISegmentedControl alloc] initWithItems:@[@"在线桌宠",@"使用最多",@"已下载"]];self.segments.selectedSegmentIndex=self.startsWithDownloadedPets?2:0;[self.segments addTarget:self action:@selector(filterChanged) forControlEvents:UIControlEventValueChanged];[self.view addSubview:self.segments];
+    self.segments=[[UISegmentedControl alloc] initWithItems:@[@"在线桌宠",@"Petdex 排行",@"已下载"]];self.segments.selectedSegmentIndex=self.startsWithDownloadedPets?2:0;[self.segments addTarget:self action:@selector(filterChanged) forControlEvents:UIControlEventValueChanged];[self.view addSubview:self.segments];
     self.countLabel=[UILabel new];self.countLabel.font=[UIFont systemFontOfSize:13 weight:UIFontWeightMedium];self.countLabel.textColor=UIColor.secondaryLabelColor;[self.view addSubview:self.countLabel];
     self.noteLabel=[UILabel new];self.noteLabel.font=[UIFont systemFontOfSize:12];self.noteLabel.textColor=UIColor.secondaryLabelColor;self.noteLabel.numberOfLines=2;[self.view addSubview:self.noteLabel];
     UICollectionViewFlowLayout *layout=[UICollectionViewFlowLayout new];layout.minimumInteritemSpacing=12;layout.minimumLineSpacing=14;layout.sectionInset=UIEdgeInsetsMake(0,16,24,16);
@@ -344,7 +357,7 @@ static NSString *WPCDigest(NSString *text) {
     CGFloat start=top+175;self.collection.frame=CGRectMake(0,start,width,MAX(0,self.view.bounds.size.height-start));
     [self.collection.collectionViewLayout invalidateLayout];
 }
-- (void)viewWillAppear:(BOOL)animated {[super viewWillAppear:animated];self.previewsVisible=YES;self.previewsSuspended=UIApplication.sharedApplication.applicationState!=UIApplicationStateActive;[self refreshLocal];}
+- (void)viewWillAppear:(BOOL)animated {[super viewWillAppear:animated];self.previewsVisible=YES;self.previewsSuspended=UIApplication.sharedApplication.applicationState!=UIApplicationStateActive;[self.collection reloadData];[self refreshLocal];}
 - (void)viewDidDisappear:(BOOL)animated {
     [super viewDidDisappear:animated];
     self.previewsVisible=NO;
@@ -366,9 +379,19 @@ static NSString *WPCDigest(NSString *text) {
 - (void)loadOnlineCatalogIfNeeded {
     if(self.catalogLoaded || self.catalogLoading)return;self.catalogLoading=YES;[self.loading startAnimating];
     __weak typeof(self) weakSelf=self;
-    [[WPPetCatalog sharedCatalog] loadPetsWithCompletion:^(NSArray<NSDictionary *> *pets,NSError *error){typeof(self) self=weakSelf;if(!self)return;self.catalogLoading=NO;self.allPets=pets;self.catalogError=error;self.catalogLoaded=YES;[self.loading stopAnimating];[self applyFilter];}];
+    [[WPPetCatalog sharedCatalog] loadPetsWithCompletion:^(NSArray<NSDictionary *> *pets,NSError *error){typeof(self) self=weakSelf;if(!self)return;self.catalogLoading=NO;self.allPets=pets;self.catalogError=error;self.catalogLoaded=YES;if(!self.rankingLoading)[self.loading stopAnimating];[self applyFilter];}];
 }
-- (void)filterChanged {[self.view endEditing:YES];if(self.segments.selectedSegmentIndex!=2)[self loadOnlineCatalogIfNeeded];[self applyFilter];[self.collection setContentOffset:CGPointMake(0,-self.collection.adjustedContentInset.top) animated:NO];}
+- (void)loadRankingIfNeeded {
+    if(self.rankingLoading || (self.rankingLoaded && !self.rankingError))return;
+    self.rankingLoading=YES;[self.loading startAnimating];
+    __weak typeof(self) weakSelf=self;
+    [[WPPetRanking sharedRanking] loadWithCompletion:^(NSArray<NSDictionary *> *items,BOOL cached,NSError *error){
+        typeof(self) self=weakSelf;if(!self)return;self.rankingLoading=NO;self.rankingLoaded=YES;
+        self.rankingPets=items;self.rankingCached=cached;self.rankingError=error;
+        if(!self.catalogLoading)[self.loading stopAnimating];[self applyFilter];
+    }];
+}
+- (void)filterChanged {[self.view endEditing:YES];if(self.segments.selectedSegmentIndex!=2)[self loadOnlineCatalogIfNeeded];if(self.segments.selectedSegmentIndex==1)[self loadRankingIfNeeded];[self applyFilter];[self.collection setContentOffset:CGPointMake(0,-self.collection.adjustedContentInset.top) animated:NO];}
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {[self applyFilter];}
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {[searchBar resignFirstResponder];}
 - (void)refreshLocal {
@@ -380,7 +403,9 @@ static NSString *WPCDigest(NSString *text) {
         NSMutableDictionary *byKey=[NSMutableDictionary new];
         for(NSURL *directory in directories){NSDictionary *metadata=WPCReadJSON([directory.path stringByAppendingPathComponent:@"pet.json"]);if(!metadata)continue;NSString *sprite=WPCLocalSpritePath(directory.path,metadata);if(!sprite.length)continue;
             NSString *key=WPCKeyForDirectory(directory,metadata);NSMutableDictionary *entry=[WPCReadJSON([directory.path stringByAppendingPathComponent:@"catalog-entry.json"]) mutableCopy]?:[NSMutableDictionary new];
-            entry[@"wp_key"]=key;entry[@"wp_directory"]=directory.path;entry[@"displayName"]=WPCString(metadata[@"displayName"]).length?metadata[@"displayName"]:@"未命名桌宠";
+            entry[@"wp_key"]=key;entry[@"wp_directory"]=directory.path;
+            NSDate *spriteDate=[NSFileManager.defaultManager attributesOfItemAtPath:sprite error:nil][NSFileModificationDate];
+            entry[@"wp_previewRevision"]=[NSString stringWithFormat:@"%@:%@",sprite.lastPathComponent,spriteDate?:@""];entry[@"displayName"]=WPCString(metadata[@"displayName"]).length?metadata[@"displayName"]:@"未命名桌宠";
             entry[@"submittedBy"]=WPCString(metadata[@"submittedBy"]).length?metadata[@"submittedBy"]:WPCString(metadata[@"author"]);
             if(!WPCString(entry[@"slug"]).length)entry[@"slug"]=WPCString(metadata[@"id"]);
             entry[@"wp_localImport"]=@([WPCString(metadata[@"source"]) isEqualToString:@"local-import"]);
@@ -392,36 +417,53 @@ static NSString *WPCDigest(NSString *text) {
     });
 }
 - (void)applyFilter {
+    NSArray *previouslyShown=self.shownPets;
     NSMutableDictionary *localMap=[NSMutableDictionary new];for(NSDictionary *entry in self.localPets)localMap[entry[@"wp_key"]]=entry;
-    NSMutableArray *online=[NSMutableArray new];for(NSDictionary *raw in self.allPets){NSString *key=[@"petdex:" stringByAppendingString:WPCString(raw[@"slug"])];NSMutableDictionary *entry=[raw mutableCopy];entry[@"wp_key"]=key;if(localMap[key])entry[@"wp_directory"]=localMap[key][@"wp_directory"];[online addObject:entry];}
-    NSInteger segment=self.segments.selectedSegmentIndex;NSArray *source=segment==2?self.localPets:online;NSDictionary *counts=[WPPreferences() dictionaryForKey:WPCatalogUsageKey]?:@{};
-    if(segment==1){NSMutableDictionary *all=[NSMutableDictionary new];for(NSDictionary *entry in online)all[entry[@"wp_key"]]=entry;for(NSDictionary *entry in self.localPets)all[entry[@"wp_key"]]=entry;
-        source=[[all.allValues filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *entry,NSDictionary *bindings){return [counts[entry[@"wp_key"]] unsignedIntegerValue]>0;}]] sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){NSUInteger ca=[counts[a[@"wp_key"]] unsignedIntegerValue],cb=[counts[b[@"wp_key"]] unsignedIntegerValue];return ca==cb?[WPCString(a[@"displayName"]) localizedStandardCompare:WPCString(b[@"displayName"])]:ca>cb?NSOrderedAscending:NSOrderedDescending;}];
+    NSMutableArray *online=[NSMutableArray new];for(NSDictionary *raw in self.allPets){NSString *key=[@"petdex:" stringByAppendingString:WPCString(raw[@"slug"])];NSMutableDictionary *entry=[raw mutableCopy];entry[@"wp_key"]=key;if(localMap[key]){entry[@"wp_directory"]=localMap[key][@"wp_directory"];entry[@"wp_previewRevision"]=localMap[key][@"wp_previewRevision"]?:@"";}[online addObject:entry];}
+    NSInteger segment=self.segments.selectedSegmentIndex;NSArray *source=segment==2?self.localPets:online;
+    NSUInteger missing=0;
+    if(segment==1){
+        NSMutableDictionary *onlineBySlug=[NSMutableDictionary new];for(NSDictionary *entry in online)onlineBySlug[WPCString(entry[@"slug"])]=entry;
+        NSMutableArray *ranked=[NSMutableArray new];
+        for(NSDictionary *rank in self.rankingPets){NSString *slug=WPCString(rank[@"slug"]);NSDictionary *entry=onlineBySlug[slug];
+            if(!entry){missing++;continue;}NSMutableDictionary *item=[entry mutableCopy];item[@"wp_installCount"]=rank[@"installCount"];[ranked addObject:item];}
+        source=ranked;
     }
     NSString *query=[self.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     self.shownPets=query.length?[source filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *entry,NSDictionary *bindings){NSString *haystack=[NSString stringWithFormat:@"%@ %@ %@",WPCString(entry[@"displayName"]),WPCString(entry[@"submittedBy"]),WPCString(entry[@"slug"])];return [haystack rangeOfString:query options:NSCaseInsensitiveSearch|NSDiacriticInsensitiveSearch].location!=NSNotFound;}]]:source;
-    self.countLabel.text=[NSString stringWithFormat:@"%lu 个桌宠%@",(unsigned long)self.shownPets.count,segment==0?@" · Petdex":segment==1?@" · 本机使用记录":@" · 已保存在本机"];
-    self.noteLabel.text=segment==1?@"按本机切换使用次数排序；Petdex 未提供全站人气数据。":segment==2?@"包含内置、在线下载和本地导入的桌宠包，可直接切换。":self.catalogError?@"当前显示缓存目录；可继续搜索和使用已下载桌宠。":@"选择喜欢的桌宠，下载后可离线使用。";
-    self.emptyLabel.text=self.shownPets.count?@"":query.length?@"没有找到符合名称或作者的桌宠":segment==1?@"使用桌宠后，会在这里按本机次数排序":segment==2?@"还没有可用的本地桌宠\n点右上角导入桌宠包":self.catalogLoaded?@"暂时无法加载桌宠目录\n请稍后重新打开":@"正在加载 Petdex 桌宠目录…";
-    [self.collection reloadData];
+    self.countLabel.text=[NSString stringWithFormat:@"%lu 个桌宠%@",(unsigned long)self.shownPets.count,segment==0?@" · Petdex":segment==1?@" · 官方安装排行":@" · 已保存在本机"];
+    if(segment==1){
+        NSString *status=self.rankingLoading?@"正在获取 Petdex 安装排行…":self.rankingCached?@"显示上次获取的官方安装排行 · 前 60":self.rankingError?@"Petdex 排行暂不可用，请切换后重试。":@"按 Petdex 官方安装量排序 · 前 60";
+        self.noteLabel.text=missing?[status stringByAppendingFormat:@"；%lu 个桌宠未在当前目录中。",(unsigned long)missing]:status;
+    }else self.noteLabel.text=segment==2?@"包含内置、在线下载和本地导入的桌宠包，可直接切换。":self.catalogError?@"当前显示缓存目录；可继续搜索和使用已下载桌宠。":@"选择喜欢的桌宠，下载后可离线使用。";
+    self.emptyLabel.text=self.shownPets.count?@"":query.length?@"没有找到符合名称或作者的桌宠":segment==1?(self.rankingLoading||self.catalogLoading?@"正在加载 Petdex 排行…":self.rankingError&&!self.rankingPets.count?@"Petdex 排行暂不可用\n请稍后重试":@"排行中的桌宠暂未出现在当前目录"):segment==2?@"还没有可用的本地桌宠\n点右上角导入桌宠包":self.catalogLoaded?@"暂时无法加载桌宠目录\n请稍后重新打开":@"正在加载 Petdex 桌宠目录…";
+    NSString *selection=WPSelectedPetDirectory()?:@"";
+    BOOL needsReload=!self.hasDisplayedResults || segment!=self.lastDisplayedSegment ||
+        ![previouslyShown isEqualToArray:self.shownPets] || ![self.lastDisplayedSelection isEqualToString:selection] ||
+        ![self.lastDisplayedDownloads isEqualToSet:self.downloading];
+    self.hasDisplayedResults=YES;self.lastDisplayedSegment=segment;self.lastDisplayedSelection=selection;self.lastDisplayedDownloads=[self.downloading copy];
+    if(needsReload)[self.collection reloadData];
 }
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {return self.shownPets.count;}
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {return CGSizeMake(floor((collectionView.bounds.size.width-44)/2),290);}
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     WPCatalogCell *cell=[collectionView dequeueReusableCellWithReuseIdentifier:@"pet" forIndexPath:indexPath];NSDictionary *entry=self.shownPets[indexPath.item];NSString *key=entry[@"wp_key"];
-    [[WPCThumbnailLoader shared] cancel:cell.imageToken];cell.imageToken=nil;cell.representedKey=key;cell.preview.image=nil;cell.previewHint.hidden=NO;cell.previewHint.text=@"加载预览…";
-    cell.nameLabel.text=WPCString(entry[@"displayName"]);NSString *author=WPCString(entry[@"submittedBy"]);NSUInteger count=[[WPPreferences() dictionaryForKey:WPCatalogUsageKey][key] unsignedIntegerValue];
-    cell.authorLabel.text=self.segments.selectedSegmentIndex==1?[NSString stringWithFormat:@"本机使用 %lu 次",(unsigned long)count]:author.length?author:[entry[@"wp_localImport"] boolValue]?@"本地导入":@"未署名";
+    NSString *previewSource=[NSString stringWithFormat:@"%@|%@|%@",WPCString(entry[@"wp_directory"]),WPCString(entry[@"spritesheetUrl"]),WPCString(entry[@"wp_previewRevision"])];
+    BOOL hasSamePreview=[cell.representedKey isEqualToString:key] && [cell.previewSource isEqualToString:previewSource] && (cell.preview.image || cell.imageToken.length);
+    if(!hasSamePreview){[[WPCThumbnailLoader shared] cancel:cell.imageToken];cell.imageToken=nil;cell.preview.image=nil;cell.previewHint.hidden=NO;cell.previewHint.text=@"加载预览…";}
+    cell.representedKey=key;cell.previewSource=previewSource;
+    cell.nameLabel.text=WPCString(entry[@"displayName"]);NSString *author=WPCString(entry[@"submittedBy"]);
+    cell.authorLabel.text=self.segments.selectedSegmentIndex==1?[NSString stringWithFormat:@"安装 %@ 次",entry[@"wp_installCount"]?:@0]:author.length?author:[entry[@"wp_localImport"] boolValue]?@"本地导入":@"未署名";
     NSString *selected=WPSelectedPetDirectory();if(!selected.length)selected=[NSURL fileURLWithPath:WPDefaultPetDirectory() isDirectory:YES].path;
     BOOL active=[WPCString(entry[@"wp_directory"]) isEqualToString:selected],busy=[self.downloading containsObject:key],downloaded=WPCString(entry[@"wp_directory"]).length>0;
     [cell.useButton setTitle:busy?@"下载中…":active?@"正在使用":downloaded?@"使用":@"下载并使用" forState:UIControlStateNormal];
     [cell.useButton setImage:busy?nil:[UIImage systemImageNamed:active?@"checkmark.circle.fill":downloaded?@"play.circle":@"arrow.down.circle"] forState:UIControlStateNormal];cell.useButton.imageEdgeInsets=UIEdgeInsetsMake(0,-3,0,3);cell.useButton.enabled=!busy;
     busy?[cell.spinner startAnimating]:[cell.spinner stopAnimating];
     __weak WPCatalogCell *weakCell=cell;__weak typeof(self) weakSelf=self;
-    if(self.previewsVisible && !self.previewsSuspended)cell.imageToken=[[WPCThumbnailLoader shared] requestEntry:entry completion:^(UIImage *image){WPCatalogCell *current=weakCell;if(!weakSelf.previewsVisible || weakSelf.previewsSuspended || ![current.representedKey isEqualToString:key])return;current.preview.image=image;current.previewHint.hidden=image!=nil;current.previewHint.text=@"预览暂不可用";}];
+    if(!hasSamePreview && self.previewsVisible && !self.previewsSuspended)cell.imageToken=[[WPCThumbnailLoader shared] requestEntry:entry completion:^(UIImage *image){WPCatalogCell *current=weakCell;if(!weakSelf.previewsVisible || weakSelf.previewsSuspended || ![current.representedKey isEqualToString:key] || ![current.previewSource isEqualToString:previewSource])return;current.imageToken=nil;current.preview.image=image;current.previewHint.hidden=image!=nil;current.previewHint.text=@"预览暂不可用";}];
     cell.action=^{[weakSelf useEntry:entry];};return cell;
 }
-- (void)collectionView:(UICollectionView *)collectionView didEndDisplayingCell:(UICollectionViewCell *)cell forItemAtIndexPath:(NSIndexPath *)indexPath {if([cell isKindOfClass:WPCatalogCell.class]){WPCatalogCell *pet=(id)cell;[[WPCThumbnailLoader shared] cancel:pet.imageToken];pet.imageToken=nil;pet.representedKey=nil;pet.preview.image=nil;}}
+- (void)collectionView:(UICollectionView *)collectionView didEndDisplayingCell:(UICollectionViewCell *)cell forItemAtIndexPath:(NSIndexPath *)indexPath {if([cell isKindOfClass:WPCatalogCell.class]){WPCatalogCell *pet=(id)cell;[[WPCThumbnailLoader shared] cancel:pet.imageToken];pet.imageToken=nil;pet.representedKey=nil;pet.previewSource=nil;pet.preview.image=nil;}}
 - (void)selectDirectory:(NSURL *)directory {
     if(!WPSelectPetDirectory(directory)){[self showError:@"桌宠选择未能保存，请稍后重试。"];return;}WPCatalogRecordUsageForDirectory(directory);
     [NSNotificationCenter.defaultCenter postNotificationName:WPSelectedPetDidChangeNotification object:nil];[self refreshLocal];

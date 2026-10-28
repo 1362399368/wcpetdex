@@ -217,6 +217,9 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
 @interface WPPetRenderer ()
 @property (nonatomic) CALayer *spriteLayer;
 @property (nonatomic) UIImage *atlas;
+// A transient read/paging failure must not permanently replace the selected
+// downloaded pet. Retry when the app becomes active again.
+@property (nonatomic) BOOL selectedPetLoaded;
 @property (nonatomic) NSData *alphaMask;
 @property (nonatomic) size_t atlasWidth;
 @property (nonatomic) size_t atlasHeight;
@@ -327,8 +330,18 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     }});
 }
 - (void)applyLoadedState:(WPAtlasLoadState *)state selected:(NSString *)selected {
-    self.needsReloadOnActivation=NO;self.loadedSelectedDirectory=selected?:@"";
     UIImage *image=state.image;NSDictionary *metadata=state.metadata;NSString *loadedPath=state.loadedPath;
+    BOOL temporaryFallback=selected.length && ![loadedPath isEqualToString:selected];
+    // Keep the already displayed selected pet during a transient reload
+    // failure rather than replacing it with the built-in pet mid-session.
+    if(temporaryFallback && self.selectedPetLoaded && self.atlas &&
+       [self.loadedSelectedDirectory isEqualToString:selected]){
+        self.needsReloadOnActivation=YES;
+        return;
+    }
+    self.needsReloadOnActivation=temporaryFallback;
+    self.selectedPetLoaded=selected.length && !temporaryFallback && image!=nil;
+    self.loadedSelectedDirectory=selected?:@"";
     self.rowAtlasPaths=state.rowAtlasPaths;self.rowFrameMaps=state.rowFrameMaps;self.rowColumnCounts=state.rowColumnCounts;
     self.failedAtlasRows=state.failedAtlasRows;self.assetDirectory=state.assetDirectory;self.loadedAtlasRow=state.loadedAtlasRow;
     [WPPreferences() setObject:@{@"selectedReference":WPSelectedPetReference()?:@"",
@@ -472,9 +485,10 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     return MAX(1,self.columns);
 }
 - (void)setAnimationActive:(BOOL)active {
+    BOOL wasPaused=self.animationPaused;
     self.animationPaused=!active;
     NSString *expected=self.reloadInFlight?self.requestedSelectedDirectory:self.loadedSelectedDirectory;
-    if(active && (self.needsReloadOnActivation || ![(WPSelectedPetDirectory()?:@"") isEqual:(expected?:@"")])){
+    if(active && ((self.needsReloadOnActivation && wasPaused) || ![(WPSelectedPetDirectory()?:@"") isEqual:(expected?:@"")])){
         [self reloadPet];
     }else if(active && !self.atlas && !self.reloadInFlight){
         if(self.metadata.count && self.rowAtlasPaths.count){self.loadedAtlasRow=-1;[self showFrame];}

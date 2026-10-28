@@ -3,8 +3,11 @@
 #import "WPCommon.h"
 #import "WPOverlay.h"
 #import "WPPetRenderer.h"
+#import "WPPetCatalog.h"
 #import "WPTapActions.h"
 #import "WPCollectorChecks.h"
+#import "WPThumbnailOptimizationChecks.h"
+#import "WPRankingUIChecks.h"
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     if ([root.accessibilityIdentifier isEqualToString:identifier]) return root;
@@ -21,6 +24,49 @@ static BOOL WPContainsText(UIView *root, NSString *fragment) {
     if ([root.accessibilityLabel containsString:fragment]) return YES;
     for (UIView *child in root.subviews) if (WPContainsText(child, fragment)) return YES;
     return NO;
+}
+
+// Exercises transient access failures using a disposable, uniquely named
+// downloaded-pet fixture. Never modifies an existing downloaded pet.
+static NSDictionary *WPPetRetentionPreviewChecks(void) {
+    NSFileManager *fm=NSFileManager.defaultManager;
+    NSString *selection=[WPDataDirectory() stringByAppendingPathComponent:@"selected-pet.json"];
+    NSData *oldSelection=[NSData dataWithContentsOfFile:selection];
+    NSArray *keys=@[@"selectedPetReference",@"selectedPetDirectory",@"selectedPetLastLoad"];
+    NSMutableDictionary *old=[NSMutableDictionary new];
+    for(NSString *key in keys)old[key]=[WPPreferences() objectForKey:key]?:NSNull.null;
+    NSString *identifier=[@"preview-retention-" stringByAppendingString:NSUUID.UUID.UUIDString];
+    NSURL *directory=[[WPPetCatalog cacheRootDirectory] URLByAppendingPathComponent:identifier isDirectory:YES];
+    NSString *json=[directory.path stringByAppendingPathComponent:@"pet.json"];
+    NSString *paused=[directory.path stringByAppendingPathComponent:@"pet.json.unavailable"];
+    NSMutableDictionary *results=[NSMutableDictionary new];
+    NSError *error=nil;
+    BOOL copied=[fm copyItemAtURL:[NSURL fileURLWithPath:WPDefaultPetDirectory() isDirectory:YES] toURL:directory error:&error];
+    NSMutableDictionary *metadata=copied?[[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:json] options:NSJSONReadingMutableContainers error:nil] mutableCopy]:nil;
+    metadata[@"displayName"]=@"测试已下载桌宠";
+    NSData *updated=metadata?[NSJSONSerialization dataWithJSONObject:metadata options:0 error:nil]:nil;
+    BOOL prepared=updated && [updated writeToFile:json atomically:YES] && WPSelectPetDirectory(directory);
+    results[@"downloadedPetFixtureSelected"]=@(prepared);
+    if(prepared){
+        WPPetRenderer *shown=[[WPPetRenderer alloc] initWithFrame:CGRectMake(0,0,120,130)];
+        BOOL selected=[shown.petName isEqual:@"测试已下载桌宠"];
+        BOOL unavailable=[fm moveItemAtPath:json toPath:paused error:nil];
+        [shown reloadPet];
+        results[@"temporaryFailureKeepsDisplayedPet"]=@(selected && unavailable && [shown.petName isEqual:@"测试已下载桌宠"] && [[shown valueForKey:@"needsReloadOnActivation"] boolValue]);
+        WPPetRenderer *fallback=[[WPPetRenderer alloc] initWithFrame:CGRectMake(0,0,120,130)];
+        BOOL fellBack=[fallback.petName containsString:@"噜噜"] && [[fallback valueForKey:@"needsReloadOnActivation"] boolValue];
+        BOOL referencePreserved=[WPSelectedPetDirectory() isEqual:directory.path];
+        BOOL restored=[fm moveItemAtPath:paused toPath:json error:nil];
+        [fallback setAnimationActive:NO];[fallback setAnimationActive:YES];
+        results[@"fallbackRetriesSelectedPetOnForeground"]=@(fellBack && referencePreserved && restored && [fallback.petName isEqual:@"测试已下载桌宠"]);
+        [shown setAnimationActive:NO];[shown setAnimationActive:YES];
+        results[@"retainedPetRecoversOnForeground"]=@([shown.petName isEqual:@"测试已下载桌宠"] && ![[shown valueForKey:@"needsReloadOnActivation"] boolValue]);
+        [shown setAnimationActive:NO];[fallback setAnimationActive:NO];
+    }
+    if(oldSelection)[oldSelection writeToFile:selection atomically:YES];else [fm removeItemAtPath:selection error:nil];
+    for(NSString *key in keys)if(old[key]==NSNull.null)[WPPreferences() removeObjectForKey:key];else [WPPreferences() setObject:old[key] forKey:key];
+    [fm removeItemAtURL:directory error:nil];
+    return results;
 }
 
 @interface WPSinglePreviewHome : UIViewController
@@ -110,7 +156,10 @@ static BOOL WPContainsText(UIView *root, NSString *fragment) {
     intro.view.frame=self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
     checks[@"introductionDoesNotContainTelegram"] = @(intro && !WPContainsText(intro.view, @"Telegram") && !WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup"));
     checks[@"petRecoveryControlsVisible"] = @(petSettings && WPFindIdentifiedView(petSettings.view, @"WPRecoveryPauseControl") && WPFindIdentifiedView(petSettings.view, @"WPRecoveryRetryControl"));
+    [checks addEntriesFromDictionary:WPPetRetentionPreviewChecks()];
     [checks addEntriesFromDictionary:WPCollectorPreviewChecks()];
+    [checks addEntriesFromDictionary:WPThumbnailOptimizationChecks()];
+    [checks addEntriesFromDictionary:WPRankingUIPreviewChecks()];
     BOOL all = YES;
     for (NSNumber *value in checks.allValues) all &= value.boolValue;
     NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
