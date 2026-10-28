@@ -53,8 +53,8 @@ with tempfile.TemporaryDirectory() as temp:
         assert b'Package: dev.zhour.wechatpet.single\n' in control['./control']
         data = read_tar(members['data.tar.gz'])
         base = ('./var/jb' if scheme == 'rootless' else '.') + '/Library/MobileSubstrate/DynamicLibraries/'
-        assert set(data) == {base+'zhour-single.dylib', base+'zhour-single.plist'}
-        assert data[base+'zhour-single.dylib'] == binary
-        assert plistlib.loads(data[base+'zhour-single.plist']) == {'Filter': {'Bundles': ['com.tencent.xin']}}
+        assert set(data) == {base+'SinglePet-zhour.dylib', base+'SinglePet-zhour.plist'}
+        assert data[base+'SinglePet-zhour.dylib'] == binary
+        assert plistlib.loads(data[base+'SinglePet-zhour.plist']) == {'Filter': {'Bundles': ['com.tencent.xin']}}
         assert not any('.bundle' in name for name in data)
 print('PASS: rootful/rootless DEB members, paths, metadata, permissions and filters')

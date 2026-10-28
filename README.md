@@ -1,13 +1,21 @@
-# zhour-single
+# SinglePet-zhour
 
-独立的微信桌宠插件，基于周游专属包 1.2.8 开发。默认桌宠为 Petdex 的「噜噜」，保留快捷聊天、消息弹幕、桌宠库和聊天参谋。此分支不提供情侣互动、情侣服务端或配对令牌。
+SinglePet-zhour 是一款微信桌宠插件。默认形象是来自 Petdex 的噜噜，可以在微信里陪你查看消息、快捷进入聊天，也可以从桌宠库切换或导入其他形象。
 
-默认单击桌宠打开快捷聊天，双击打开设置，长按打开快捷菜单，摇晃打开快捷聊天。长按和摇晃可在桌宠设置中切换到其他功能。插件使用单独的偏好设置和数据目录，不会读取或清除原情侣版的配对数据。两个版本应分别注入使用，避免同时加载同名运行类。
+- **快捷聊天**：点击桌宠打开会话列表，点头像进入聊天。
+- **消息弹幕**：在微信界面显示消息提醒，可调整显示方式。
+- **自由手势**：单击、双击、长按和摇晃可按自己的习惯设置快捷功能。
+- **桌宠外观**：调整桌宠大小和位置，使用桌宠库或导入外观包。
+- **聊天参谋**：配置模型服务后，获取聊天分析和回复建议，保留恋爱聊天等预设。
 
-## 构建
+Telegram 交流与反馈：[加入群聊](https://t.me/+TdjkYED5H4Q3ZTdh)。
 
-需要 macOS、Xcode 的 iOS SDK、Python 3 和支持 WebP 的 Pillow。执行 `./build.sh device single`。
+聊天参谋在你主动使用时，会把选取的聊天内容发送给你配置的模型服务；API Key 保存在本机钥匙串。在线桌宠库和 Telegram 入口需要网络。
 
-输出 `build/zhour-single-1.2.8-TrollFools.zip`，包含插件动态库和资源包。构建时从 Petdex 下载噜噜原图，校验固定的 SHA-256 后无损分割为动作条；本源码仓库不包含噜噜原图。来源与版权说明见 `ASSET-LICENSE.md`。线上桌宠库需要网络；聊天参谋需要用户单独配置模型服务，其 API 密钥使用单身版独立存储。
+## 安装与构建
 
-无 `.bundle` 的 DEB 使用 `./build.sh deb single` 构建，输出 rootful 和 rootless 两种格式。噜噜动画内嵌动态库，首次启动时校验并存入微信私有目录；不会重置已选择的桌宠。模拟器预览使用 `./build.sh preview single` 或 `./build.sh preview-embedded single`。本项目调用微信内部接口，不同微信版本的兼容性需要在真机上验证。
+DEB 包的内置噜噜资源随插件携带，不需要另装 `.bundle`。首次使用默认显示噜噜，之前选过其他桌宠则沿用原选择。Rootless 和 Rootful 请按安装环境选择。注入 IPA 时请先移除旧版 `zhour-single`，避免同时加载两个版本。
+
+开发构建需要 macOS、Xcode iOS SDK、Python 3、支持 WebP 的 Pillow 和 OpenSSL。运行 `./build.sh deb single` 构建两种 DEB；`./build.sh device single` 构建 ZIP；`./build.sh preview-embedded single` 可构建模拟器预览。插件依赖微信内部接口，请在实际设备与微信版本上测试。
+
+内嵌资源经过 AES 混淆并验证内容完整性，发布构建移除部分符号。密钥位于客户端及公开源码中，这些措施只能增加直接提取的难度，不能保证防复制或防破解。软件按本仓库 MIT 许可发布；噜噜由 Petdex 用户 gitcjp 提供，素材不在软件 MIT 许可范围内，公开再分发前请确认素材授权，详见 `ASSET-LICENSE.md`。

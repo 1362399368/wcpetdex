@@ -19,7 +19,7 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
 @implementation WPSinglePreviewHome
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"zhour-single 测试";
+    self.title = @"SinglePet-zhour 测试";
     self.view.backgroundColor = UIColor.systemBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"桌宠设置" style:UIBarButtonItemStylePlain target:self action:@selector(settings)];
 }
@@ -70,6 +70,13 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     [settings.view layoutIfNeeded];
     checks[@"longPressSettingVisible"] = @(settings && WPFindIdentifiedView(settings.view, @"WPLongPressAction") != nil);
     checks[@"shakeSettingVisible"] = @(settings && WPFindIdentifiedView(settings.view, @"WPShakeAction") != nil);
+    UIViewController *home = [NSClassFromString(@"WPSettingsController") new];
+    home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
+    checks[@"pluginIntroductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction") != nil);
+    checks[@"telegramEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") != nil);
+    UIViewController *intro = [NSClassFromString(@"WPPluginIntroductionController") new];
+    intro.view.frame = self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
+    checks[@"telegramInIntroductionVisible"] = @(intro && WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup") != nil);
     BOOL all = YES;
     for (NSNumber *value in checks.allValues) all &= value.boolValue;
     NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
