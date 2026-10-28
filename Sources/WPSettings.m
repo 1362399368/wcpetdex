@@ -131,7 +131,8 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 @interface WPQuickActionsController : WPCardPageController
 @end
 @implementation WPQuickActionsController
-- (void)viewDidLoad{self.title=@"快捷功能";[super viewDidLoad];}
+- (void)viewDidLoad{self.title=@"快捷设置";[super viewDidLoad];}
+- (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadCards];}
 - (UIView *)tapActionRowWithTitle:(NSString *)title doubleTap:(BOOL)doubleTap handler:(void (^)(WPTapAction))handler{
     UIStackView *column=[UIStackView new];column.axis=UILayoutConstraintAxisVertical;column.spacing=8;
     [column addArrangedSubview:WPThemeLabel(title,15,UIFontWeightMedium,WPThemePrimaryText())];
@@ -146,56 +147,6 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     [column addArrangedSubview:choice];
     return column;
 }
-- (void)buildCards{
-    __weak typeof(self) weakSelf=self;
-    UIStackView *card=[self addCard];
-    [card addArrangedSubview:[self rowWithTitle:@"一键已读" detail:[WPActionAdapter supportsMarkAllRead]?@"已接入当前微信版本":@"当前微信版本未适配" actionTitle:@"执行" handler:^{
-        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"read");}]];
-    [card addArrangedSubview:[self rowWithTitle:@"一键跳转朋友圈" detail:nil actionTitle:@"打开" handler:^{
-        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"moments");}]];
-    [self addNote:@"也可以长按桌宠，滑到对应图标后松手。"];
-    void (^changed)(void)=^{[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];};
-    [self addSectionTitle:@"桌宠点击动作"];
-    UIStackView *tapActions=[self addCard];
-    for(NSNumber *gesture in @[@NO,@YES]){
-        BOOL doubleTap=gesture.boolValue;
-        [tapActions addArrangedSubview:[self tapActionRowWithTitle:doubleTap?@"双击桌宠":@"单击桌宠" doubleTap:doubleTap handler:^(WPTapAction action){
-            if(action==WPTapActionQuickChat && !WPQuickChatEnabled())
-                [WPPreferences() setBool:YES forKey:@"quickChatEnabled"];
-            if(action==WPTapActionChatAdvisor && !WPChatAdvisor.isReady)
-                [weakSelf alert:@"已设为聊天参谋。还需要在设置首页的「聊天参谋」里填写 API Key 并启用。"];
-            WPSetConfiguredTapAction(doubleTap,action);
-            changed();[weakSelf reloadCards];
-        }]];
-    }
-    [tapActions addArrangedSubview:[self switchRowWithTitle:@"贴边时直接执行点击动作" detail:@"单击和双击直接执行上方设置；关闭时先展开桌宠" on:WPQuickChatOptionBool(@"edgeTapActions") handler:^(BOOL on){WPQuickChatSetOption(@"edgeTapActions",@(on));}]];
-    [self addNote:@"单击和双击可分别选择动作；选择聊天浮窗时会自动开启便捷聊天；聊天参谋需要先打开一个聊天。"];
-    [self addSectionTitle:@"便捷聊天"];
-    BOOL enabled=WPQuickChatEnabled();
-    UIStackView *quick=[self addCard];
-    [quick addArrangedSubview:[self switchRowWithTitle:@"便捷聊天浮窗" detail:@"按设定的点击动作展开最近聊天，点头像进入聊天；未读头像提醒可在外观设置中单独开启" on:enabled handler:^(BOOL on){
-        if(!on)WPResetQuickChatTapActions();
-        [WPPreferences() setBool:on forKey:@"quickChatEnabled"];changed();[weakSelf reloadCards];}]];
-    UIView *flash=[self switchRowWithTitle:@"新消息闪烁提醒" detail:@"新消息到达时桌宠探出、闪烁并显示发送方头像；免打扰的聊天不提醒" on:WPQuickChatFlashEnabled() handler:^(BOOL on){
-        [WPPreferences() setBool:on forKey:@"quickChatFlash"];changed();}];
-    flash.userInteractionEnabled=enabled;flash.alpha=enabled?1:.4;
-    [quick addArrangedSubview:flash];
-    [quick addArrangedSubview:[self rowWithTitle:@"快捷聊天设置" detail:@"侧栏外观、头像打开方式、会话过滤与贴边点击" actionTitle:@"设置" handler:^{[weakSelf.navigationController pushViewController:[WPQuickChatSettingsController new] animated:YES];}]];
-    [self addNote:@"开关即时生效，不用重启微信。关闭便捷聊天时，指向它的点击动作会恢复为设置。"];
-    UIStackView *reminders=[self addCard];
-    [reminders addArrangedSubview:[self rowWithTitle:@"提醒方式" detail:@"提醒强度、安静时段与指定联系人" actionTitle:nil handler:^{[weakSelf.navigationController pushViewController:[WPReminderSettingsController new] animated:YES];}]];
-}
-@end
-
-@interface WPAppearanceSettingsController : WPCardPageController <UIDocumentPickerDelegate>
-@property(nonatomic) NSString *importStatus;
-@end
-
-@interface WPPetSettingsController : WPCardPageController
-@end
-@implementation WPPetSettingsController
-- (void)viewDidLoad{self.title=@"桌宠设置";[super viewDidLoad];}
-- (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadCards];}
 - (UIView *)gestureActionRow:(BOOL)longPress {
     NSArray<NSString *> *values=longPress?@[@"menu",@"quickChat",@"settings",@"moments",@"advisor",@"none"]:@[@"quickChat",@"settings",@"moments",@"advisor",@"none"];
     NSDictionary *names=@{@"menu":@"快捷菜单",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"moments":@"朋友圈",@"advisor":@"聊天参谋",@"none":@"不执行"};
@@ -218,6 +169,83 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 }
 - (void)buildCards{
     __weak typeof(self) weakSelf=self;
+    [self addSectionTitle:@"快捷操作"];
+    UIStackView *card=[self addCard];
+    [card addArrangedSubview:[self rowWithTitle:@"一键已读" detail:[WPActionAdapter supportsMarkAllRead]?@"已接入当前微信版本":@"当前微信版本未适配" actionTitle:@"执行" handler:^{
+        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"read");}]];
+    [card addArrangedSubview:[self rowWithTitle:@"一键跳转朋友圈" detail:nil actionTitle:@"打开" handler:^{
+        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"moments");}]];
+    [self addNote:@"也可以长按桌宠，滑到对应图标后松手。"];
+    void (^changed)(void)=^{[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];};
+    [self addSectionTitle:@"桌宠点击动作"];
+    UIStackView *tapActions=[self addCard];
+    for(NSNumber *gesture in @[@NO,@YES]){
+        BOOL doubleTap=gesture.boolValue;
+        [tapActions addArrangedSubview:[self tapActionRowWithTitle:doubleTap?@"双击桌宠":@"单击桌宠" doubleTap:doubleTap handler:^(WPTapAction action){
+            if(action==WPTapActionQuickChat && !WPQuickChatEnabled())
+                [WPPreferences() setBool:YES forKey:@"quickChatEnabled"];
+            if(action==WPTapActionChatAdvisor && !WPChatAdvisor.isReady)
+                [weakSelf alert:@"已设为聊天参谋。还需要在设置首页的「聊天参谋」里填写 API Key 并启用。"];
+            WPSetConfiguredTapAction(doubleTap,action);
+            changed();[weakSelf reloadCards];
+        }]];
+    }
+    [tapActions addArrangedSubview:[self switchRowWithTitle:@"贴边时直接执行点击动作" detail:@"单击和双击直接执行上方设置；关闭时先展开桌宠" on:WPQuickChatOptionBool(@"edgeTapActions") handler:^(BOOL on){WPQuickChatSetOption(@"edgeTapActions",@(on));}]];
+    [self addNote:@"单击和双击可分别选择动作；选择聊天浮窗时会自动开启便捷聊天；聊天参谋需要先打开一个聊天。"];
+    [self addSectionTitle:@"长按、拖动与摇晃"];
+    UIStackView *gesture=[self addCard];
+    [gesture addArrangedSubview:[self sliderRowWithTitle:@"长按菜单圆弧" value:[WPPreferences() doubleForKey:@"menuScale"] minimum:.6 maximum:4 format:^NSString *(float v){return [NSString stringWithFormat:@"%.0f 点",v*80];} handler:^(float v){
+        [WPPreferences() setDouble:v forKey:@"menuScale"];changed();[[WPOverlayManager sharedManager] previewMenuRadius];}]];
+    [self addNote:@"圆弧半径 48–320 点，拖动即时预览；屏幕放不下时会自动收小。"];
+    UIView *longPress=[self gestureActionRow:YES]; longPress.accessibilityIdentifier=@"WPLongPressAction"; [gesture addArrangedSubview:longPress];
+    UIView *shakeAction=[self gestureActionRow:NO]; shakeAction.accessibilityIdentifier=@"WPShakeAction"; [gesture addArrangedSubview:shakeAction];
+    NSInteger level=WPShakeSensitivityFromPreferenceValue([WPPreferences() objectForKey:@"shakeSensitivity"]);
+    [gesture addArrangedSubview:[self segmentedRowWithTitle:@"摇晃灵敏度" items:@[@"低",@"中",@"高"] selected:level handler:^(NSInteger index){[WPPreferences() setInteger:index forKey:@"shakeSensitivity"];}]];
+    [gesture addArrangedSubview:WPThemeLabel(@"按住桌宠快速左右来回拖动执行所选动作；普通拖动只移动位置。灵敏度越高，摇晃幅度和次数要求越低。",12,UIFontWeightRegular,WPThemeSecondaryText())];
+    UIView *lock=[self switchRowWithTitle:@"锁定桌宠位置" detail:@"防止误拖动；点击、长按和摇晃动作继续可用。键盘弹出时临时避让，收起后恢复原位。" on:WPPositionLocked() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"positionLocked"];changed();}];
+    ((UIStackView *)lock).arrangedSubviews.lastObject.accessibilityIdentifier=@"WPPositionLockSwitch";[gesture addArrangedSubview:lock];
+    [self addSectionTitle:@"贴边与收起"];
+    UIStackView *edge=[self addCard];
+    [edge addArrangedSubview:[self switchRowWithTitle:@"贴边自动收起" detail:@"靠边闲置约 3 秒后探头" on:[WPPreferences() boolForKey:@"autoPeek"] handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"autoPeek"];changed();}]];
+    [edge addArrangedSubview:[self switchRowWithTitle:@"有未读时也允许收起" detail:@"贴边收起后仍显示未读头像，可直接点击进入聊天" on:WPAllowUnreadPeek() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"allowUnreadPeek"];changed();}]];
+    [self addNote:@"横屏与竖屏分别记住最后一次拖动的位置；键盘避让不会覆盖保存的位置。锁定后仍可拖动手指摇晃桌宠，人物本身保持原位。"];
+
+    WPAddQuickChatGestureSettings(self);
+    [self addSectionTitle:@"便捷聊天"];
+    BOOL enabled=WPQuickChatEnabled();
+    UIStackView *quick=[self addCard];
+    UIView *enableQuick=[self switchRowWithTitle:@"便捷聊天浮窗" detail:@"按设定的点击动作展开最近聊天，点头像进入聊天；未读头像提醒可在外观设置中单独开启" on:enabled handler:^(BOOL on){
+        [WPPreferences() setBool:on forKey:@"quickChatEnabled"];changed();[weakSelf reloadCards];}];
+    ((UIStackView *)enableQuick).arrangedSubviews.lastObject.accessibilityIdentifier=@"WPQuickChatEnableSwitch";
+    [quick addArrangedSubview:enableQuick];
+    UIView *flash=[self switchRowWithTitle:@"新消息闪烁提醒" detail:@"新消息到达时桌宠探出、闪烁并显示发送方头像；免打扰的聊天不提醒" on:WPQuickChatFlashEnabled() handler:^(BOOL on){
+        [WPPreferences() setBool:on forKey:@"quickChatFlash"];changed();}];
+    flash.userInteractionEnabled=enabled;flash.alpha=enabled?1:.4;
+    [quick addArrangedSubview:flash];
+    [quick addArrangedSubview:[self rowWithTitle:@"快捷聊天设置" detail:@"侧栏外观、消息提示与会话过滤" actionTitle:@"设置" handler:^{[weakSelf.navigationController pushViewController:[WPQuickChatSettingsController new] animated:YES];}]];
+    [self addNote:@"开关即时生效，不用重启微信。关闭后保留点击与手势动作设置，重新开启即可继续使用。"];
+    [self addSectionTitle:@"提醒设置"];
+    UIStackView *reminders=[self addCard];
+    [reminders addArrangedSubview:[self rowWithTitle:@"提醒方式" detail:@"提醒强度、安静时段与指定联系人" actionTitle:nil handler:^{[weakSelf.navigationController pushViewController:[WPReminderSettingsController new] animated:YES];}]];
+    [self addSectionTitle:@"手势恢复"];
+    UIStackView *resetGestures=[self addCard];
+    [resetGestures addArrangedSubview:[self rowWithTitle:@"恢复手势参数" detail:@"仅恢复菜单圆弧、摇晃灵敏度和位置锁定；不改变动作选择" actionTitle:@"恢复" handler:^{
+        for(NSString *key in @[@"menuScale",@"shakeSensitivity",@"positionLocked"])[WPPreferences() removeObjectForKey:key];
+        changed();[weakSelf reloadCards];}]];
+}
+@end
+
+@interface WPAppearanceSettingsController : WPCardPageController <UIDocumentPickerDelegate>
+@property(nonatomic) NSString *importStatus;
+@end
+
+@interface WPPetSettingsController : WPCardPageController
+@end
+@implementation WPPetSettingsController
+- (void)viewDidLoad{self.title=@"桌宠设置";[super viewDidLoad];}
+- (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadCards];}
+- (void)buildCards{
+    __weak typeof(self) weakSelf=self;
     NSString *directory=WPSelectedPetDirectory();
     NSData *petData=[NSData dataWithContentsOfFile:[(directory.length?directory:WPDefaultPetDirectory()) stringByAppendingPathComponent:@"pet.json"]];
     id metadata=petData?[NSJSONSerialization JSONObjectWithData:petData options:0 error:nil]:nil;
@@ -230,27 +258,11 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     UIStackView *look=[self addCard];
     [look addArrangedSubview:[self sliderRowWithTitle:@"大小" value:[WPPreferences() doubleForKey:@"petSize"] minimum:48 maximum:160 format:^NSString *(float v){return [NSString stringWithFormat:@"%.0f 点",v];} handler:^(float v){[WPPreferences() setDouble:v forKey:@"petSize"];changed();}]];
     [look addArrangedSubview:[self sliderRowWithTitle:@"不透明度" value:[WPPreferences() doubleForKey:@"petOpacity"] minimum:.25 maximum:1 format:^NSString *(float v){return [NSString stringWithFormat:@"%.0f%%",v*100];} handler:^(float v){[WPPreferences() setDouble:v forKey:@"petOpacity"];changed();}]];
-    [look addArrangedSubview:[self sliderRowWithTitle:@"菜单圆弧" value:[WPPreferences() doubleForKey:@"menuScale"] minimum:.6 maximum:4 format:^NSString *(float v){return [NSString stringWithFormat:@"%.0f 点",v*80];} handler:^(float v){
-        [WPPreferences() setDouble:v forKey:@"menuScale"];changed();[[WPOverlayManager sharedManager] previewMenuRadius];}]];
-    [self addNote:@"圆弧半径 48–320 点，拖动即时预览；屏幕放不下时会自动收小。"];
-    [self addSectionTitle:@"手势"];
-    UIStackView *gesture=[self addCard];
-    UIView *longPress=[self gestureActionRow:YES]; longPress.accessibilityIdentifier=@"WPLongPressAction"; [gesture addArrangedSubview:longPress];
-    UIView *shakeAction=[self gestureActionRow:NO]; shakeAction.accessibilityIdentifier=@"WPShakeAction"; [gesture addArrangedSubview:shakeAction];
-    NSInteger level=WPShakeSensitivityFromPreferenceValue([WPPreferences() objectForKey:@"shakeSensitivity"]);
-    [gesture addArrangedSubview:[self segmentedRowWithTitle:@"摇晃灵敏度" items:@[@"低",@"中",@"高"] selected:level handler:^(NSInteger index){[WPPreferences() setInteger:index forKey:@"shakeSensitivity"];}]];
-    [gesture addArrangedSubview:WPThemeLabel(@"按住桌宠快速左右来回拖动执行所选动作；普通拖动只移动位置。灵敏度越高，摇晃幅度和次数要求越低。",12,UIFontWeightRegular,WPThemeSecondaryText())];
-    UIView *lock=[self switchRowWithTitle:@"锁定桌宠位置" detail:@"防止误拖动；点击、长按和摇晃动作继续可用。键盘弹出时临时避让，收起后恢复原位。" on:WPPositionLocked() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"positionLocked"];changed();}];
-    ((UIStackView *)lock).arrangedSubviews.lastObject.accessibilityIdentifier=@"WPPositionLockSwitch";[gesture addArrangedSubview:lock];
-    [gesture addArrangedSubview:[self switchRowWithTitle:@"贴边自动收起" detail:@"靠边闲置约 3 秒后探头" on:[WPPreferences() boolForKey:@"autoPeek"] handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"autoPeek"];changed();}]];
-    [gesture addArrangedSubview:[self switchRowWithTitle:@"有未读时也允许收起" detail:@"贴边收起后仍显示未读头像，可直接点击进入聊天" on:WPAllowUnreadPeek() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"allowUnreadPeek"];changed();}]];
-    [self addNote:@"横屏与竖屏分别记住最后一次拖动的位置；键盘避让不会覆盖保存的位置。锁定后仍可拖动手指摇晃桌宠，人物本身保持原位。"];
-
     UIStackView *reset=[self addCard];
-    [reset addArrangedSubview:[self rowWithTitle:@"恢复默认桌宠与位置" detail:@"大小、透明度、圆弧和位置一起恢复" actionTitle:@"恢复" handler:^{
+    [reset addArrangedSubview:[self rowWithTitle:@"恢复默认桌宠与位置" detail:@"恢复默认桌宠、大小、透明度和位置" actionTitle:@"恢复" handler:^{
         WPResetSelectedPet();
         WPResetPositionAnchors();
-        for(NSString *key in @[@"positionLocked",@"petSize",@"petOpacity",@"menuScale",@"shakeSensitivity"])[WPPreferences() removeObjectForKey:key];
+        for(NSString *key in @[@"petSize",@"petOpacity"])[WPPreferences() removeObjectForKey:key];
         [NSNotificationCenter.defaultCenter postNotificationName:WPSelectedPetDidChangeNotification object:nil];changed();[weakSelf reloadCards];}]];
 }
 @end
@@ -283,7 +295,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     [self addSectionTitle:@"未读聊天头像"];
     BOOL unreadEnabled=WPUnreadAvatarEnabled();
     UIStackView *unread=[self addCard];
-    UIView *toggleRow=[self switchRowWithTitle:@"显示最新未读头像" detail:@"在桌宠正上方显示最新未读聊天的头像，点击进入聊天；排除折叠群聊和免打扰消息。可在桌宠设置中允许有未读时贴边收起。" on:unreadEnabled handler:^(BOOL on){
+    UIView *toggleRow=[self switchRowWithTitle:@"显示最新未读头像" detail:@"在桌宠正上方显示最新未读聊天的头像，点击进入聊天；排除折叠群聊和免打扰消息。可在快捷设置中允许有未读时贴边收起。" on:unreadEnabled handler:^(BOOL on){
         [WPPreferences() setBool:on forKey:@"unreadAvatarEnabled"];
         [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
         [weakSelf reloadCards];
@@ -372,8 +384,8 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     [visibility addArrangedSubview:hideRow];
     __weak typeof(self) weakSelf=self;
     NSArray *features=@[
-        @[@"快捷功能",@"一键已读 · 朋友圈",[UIImage systemImageNamed:@"bolt.fill"],UIColor.systemYellowColor,^{[weakSelf push:[WPQuickActionsController new]];}],
-        @[@"桌宠设置",@"外观、切换桌宠与手势",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
+        @[@"快捷设置",@"点击、长按与摇晃",[UIImage systemImageNamed:@"bolt.fill"],UIColor.systemYellowColor,^{[weakSelf push:[WPQuickActionsController new]];}],
+        @[@"桌宠设置",@"外观、切换桌宠与位置",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
         @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}],
         @[@"聊天参谋",WPChatAdvisor.isReady?@"意图分析 · 建议回复":@"接入硅基流动后使用",[UIImage systemImageNamed:@"sparkles"],UIColor.systemPurpleColor,^{[weakSelf push:[WPChatAdvisorSettingsController new]];}]];
     NSUInteger columns=self.view.bounds.size.width>0 && self.view.bounds.size.width<340?1:2;

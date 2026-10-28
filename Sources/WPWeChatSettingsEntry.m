@@ -118,8 +118,8 @@ static BOOL WPRegisterPluginCollector(void) {
     // Standard API: https://apt.25mao.com/view/116/nohistory . The Refine
     // implementation was also checked in the user's installed binary:
     // sharedInstance @16@0:8, registration v40@0:8@16@24@32.
-    if(WPRegisterCollectorClass(objc_getClass("WCRefinePluginHubManager")))return YES;
-    return WPRegisterCollectorClass(objc_getClass("WCPluginsMgr"));
+    if(WPRegisterCollectorClass(objc_getClass("WCPluginsMgr")))return YES;
+    return WPRegisterCollectorClass(objc_getClass("WCRefinePluginHubManager"));
 }
 
 static id WPObjectIvar(id object, const char *name) {
@@ -254,7 +254,9 @@ static id WPNewSection(Class sectionClass, id cell) {
 
 static void WPInsertNativeSettingsRow(id controller) {
     if (![NSThread isMainThread]) return;
-    if(WPRegisterPluginCollector())return;
+    // Keep the native Settings entry available even after registration: the
+    // user can open this plugin from either location independently.
+    WPRegisterPluginCollector();
     id manager = WPTableManager(controller);
     if (!manager) return;
     id previous = objc_getAssociatedObject(manager, kWPSettingsSectionKey);

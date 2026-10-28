@@ -2,6 +2,7 @@
 #import "WPWeChatSettingsEntry.h"
 #import "WPSettings.h"
 #import "WPCommon.h"
+#import "WPEdition.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -99,7 +100,7 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     NSUInteger successful=manager.calls;
     for(NSUInteger i=0;i<100;i++)WPPreviewRegisterCollectorClass(good);
     r[@"collectorRepeatedInstallRegistersOnlyOnce"]=@(manager.calls==successful);
-    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:@"周游专属包"]&&manager.version.length>0&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
+    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:@"SinglePet-zhour"]&&[manager.version isEqual:WPPluginVersion()]&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
     WPCollectorTestManager *replacement=[WPCollectorTestManager new];sWPCollectorTestSingleton=replacement;
     r[@"collectorReplacementSingletonRegistersOnce"]=@(WPPreviewRegisterCollectorClass(good)&&replacement.calls==1);
 
@@ -138,21 +139,26 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     WPCollectorTestManager *late=[WPCollectorTestManager new];sWPCollectorTestSingleton=late;
     WPInstallWeChatSettingsEntry();
     ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
-    r[@"collectorLateLoadMovesRowAndPreservesReload"]=@(late.calls==1&&table.sections.count==0&&sWPCollectorOriginalReloads==3);
+    r[@"collectorAndNativeEntryCoexistAfterLateLoad"]=@(late.calls==1&&table.sections.count==1&&sWPCollectorOriginalReloads==3);
+    WPCollectorTestSection *visibleSection=table.sections.firstObject;
+    NSDictionary *visibleCell=visibleSection.cells.firstObject;
+    r[@"collectorNativeEntryHasCorrectTitleAndAction"]=@([visibleCell[@"title"] isEqual:@"SinglePet-zhour"]&&[visibleCell[@"action"] isEqual:@"wp_zhouyouOpenSettings"]&&visibleCell[@"target"]==native);
+    ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
+    r[@"collectorAndNativeEntryRemainUniqueOnReload"]=@(late.calls==1&&table.sections.count==1&&sWPCollectorOriginalReloads==4);
     for(NSUInteger i=0;i<10;i++)WPInstallWeChatSettingsEntry();
     r[@"collectorActiveRetriesDoNotDuplicateRegistration"]=@(late.calls==1);
     late=nil;sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();
     ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
-    r[@"collectorUnavailableAgainRestoresNativeEntry"]=@(table.sections.count==1&&sWPCollectorOriginalReloads==4);
+    r[@"collectorUnavailableAgainRestoresNativeEntry"]=@(table.sections.count==1&&sWPCollectorOriginalReloads==5);
     WPCollectorTestClass(@"WCRefinePluginHubManager",(IMP)WPRefineTestShared,"@16@0:8");
     WPCollectorTestManager *refine=[WPCollectorTestManager new],*standard=[WPCollectorTestManager new];
     sWPRefineTestSingleton=refine;sWPCollectorTestSingleton=standard;WPPreviewResetCollectorRegistration();
     WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineOwnHubHasPriority"]=@(refine.calls==1&&standard.calls==0&&[refine.title isEqual:@"周游专属包"]);
+    r[@"collectorStandardFacadeHasPriority"]=@(standard.calls==1&&refine.calls==0&&[standard.title isEqual:@"SinglePet-zhour"]);
     for(NSUInteger i=0;i<10;i++)WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineHubDoesNotDuplicate"]=@(refine.calls==1);
-    sWPRefineTestSingleton=nil;WPPreviewResetCollectorRegistration();WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineUnavailableUsesStandardFacade"]=@(standard.calls==1);
-    sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();
+    r[@"collectorStandardFacadeDoesNotDuplicate"]=@(standard.calls==1);
+    sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();WPInstallWeChatSettingsEntry();
+    r[@"collectorStandardUnavailableUsesRefineFacade"]=@(refine.calls==1);
+    sWPCollectorTestSingleton=nil;sWPRefineTestSingleton=nil;WPPreviewResetCollectorRegistration();
     return r;
 }

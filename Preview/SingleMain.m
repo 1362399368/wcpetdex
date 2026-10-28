@@ -4,6 +4,7 @@
 #import "WPOverlay.h"
 #import "WPPetRenderer.h"
 #import "WPTapActions.h"
+#import "WPCollectorChecks.h"
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     if ([root.accessibilityIdentifier isEqualToString:identifier]) return root;
@@ -63,13 +64,34 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     checks[@"invalidShakeChoiceRejected"] = @([WPConfiguredGestureAction(NO) isEqualToString:@"settings"]);
     if (oldLong) [WPPreferences() setObject:oldLong forKey:@"longPressAction"]; else [WPPreferences() removeObjectForKey:@"longPressAction"];
     if (oldShake) [WPPreferences() setObject:oldShake forKey:@"shakeAction"]; else [WPPreferences() removeObjectForKey:@"shakeAction"];
-    Class cls = NSClassFromString(@"WPPetSettingsController");
+    Class cls = NSClassFromString(@"WPQuickActionsController");
     UIViewController *settings = cls ? [cls new] : nil;
     settings.view.frame = self.window.bounds;
     [settings.view setNeedsLayout];
     [settings.view layoutIfNeeded];
     checks[@"longPressSettingVisible"] = @(settings && WPFindIdentifiedView(settings.view, @"WPLongPressAction") != nil);
     checks[@"shakeSettingVisible"] = @(settings && WPFindIdentifiedView(settings.view, @"WPShakeAction") != nil);
+    checks[@"sidebarAvatarActionsVisible"] = @(WPFindIdentifiedView(settings.view, @"WPQuickChatAvatarTapAction") && WPFindIdentifiedView(settings.view, @"WPQuickChatAvatarHoldAction"));
+    checks[@"quickChatEnableSwitchVisible"] = @(WPFindIdentifiedView(settings.view, @"WPQuickChatEnableSwitch") != nil);
+    id previousEnabled=[WPPreferences() objectForKey:@"quickChatEnabled"];
+    id previousSingle=[WPPreferences() objectForKey:@"singleTapAction"];
+    id previousDouble=[WPPreferences() objectForKey:@"doubleTapAction"];
+    WPSetConfiguredTapAction(NO,WPTapActionQuickChat);
+    WPSetConfiguredTapAction(YES,WPTapActionChatAdvisor);
+    [WPPreferences() setBool:YES forKey:@"quickChatEnabled"];
+    [settings viewWillAppear:NO];
+    UISwitch *enable=(UISwitch *)WPFindIdentifiedView(settings.view,@"WPQuickChatEnableSwitch");
+    [enable setOn:NO];[enable sendActionsForControlEvents:UIControlEventValueChanged];
+    BOOL preservedOff=enable && ![WPPreferences() boolForKey:@"quickChatEnabled"] && WPConfiguredTapAction(NO)==WPTapActionQuickChat && WPConfiguredTapAction(YES)==WPTapActionChatAdvisor;
+    enable=(UISwitch *)WPFindIdentifiedView(settings.view,@"WPQuickChatEnableSwitch");
+    [enable setOn:YES];[enable sendActionsForControlEvents:UIControlEventValueChanged];
+    checks[@"quickChatTogglePreservesTapActions"] = @(preservedOff && enable && [WPPreferences() boolForKey:@"quickChatEnabled"] && WPConfiguredTapAction(NO)==WPTapActionQuickChat && WPConfiguredTapAction(YES)==WPTapActionChatAdvisor);
+    for(NSArray *entry in @[@[@"quickChatEnabled",previousEnabled?:NSNull.null],@[@"singleTapAction",previousSingle?:NSNull.null],@[@"doubleTapAction",previousDouble?:NSNull.null]]) {
+        if(entry[1]==NSNull.null)[WPPreferences() removeObjectForKey:entry[0]];else [WPPreferences() setObject:entry[1] forKey:entry[0]];
+    }
+    UIViewController *petSettings = [NSClassFromString(@"WPPetSettingsController") new];
+    petSettings.view.frame = self.window.bounds; [petSettings.view setNeedsLayout]; [petSettings.view layoutIfNeeded];
+    checks[@"gesturesNotDuplicatedInPetSettings"] = @(petSettings && !WPFindIdentifiedView(petSettings.view, @"WPLongPressAction") && !WPFindIdentifiedView(petSettings.view, @"WPShakeAction"));
     UIViewController *home = [NSClassFromString(@"WPSettingsController") new];
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
     checks[@"pluginIntroductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction") != nil);
@@ -77,6 +99,7 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     UIViewController *intro = [NSClassFromString(@"WPPluginIntroductionController") new];
     intro.view.frame = self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
     checks[@"telegramInIntroductionVisible"] = @(intro && WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup") != nil);
+    [checks addEntriesFromDictionary:WPCollectorPreviewChecks()];
     BOOL all = YES;
     for (NSNumber *value in checks.allValues) all &= value.boolValue;
     NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};

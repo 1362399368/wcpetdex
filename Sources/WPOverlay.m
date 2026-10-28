@@ -797,11 +797,11 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     [self.pet playSemanticAction:@"tap"];
     if(action == WPTapActionQuickChat){
         if(WPQuickChatEnabled())[self toggleQuickChat];
-        else [self showMessage:@"请先在快捷功能中开启便捷聊天浮窗。"];
+        else [self showMessage:@"请先在快捷设置中开启便捷聊天浮窗。"];
         return;
     }
     if(WPQuickChatEnabled())[self toggleQuickChat];
-    else [self showMessage:@"请先在快捷功能中开启便捷聊天浮窗。"] ;
+    else [self showMessage:@"请先在快捷设置中开启便捷聊天浮窗。"] ;
 }
 - (void)tap { [self performTapAction:WPConfiguredTapAction(NO)]; }
 - (void)doubleTap { [self performTapAction:WPConfiguredTapAction(YES)]; }

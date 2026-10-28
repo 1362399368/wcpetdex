@@ -73,7 +73,7 @@
     if(!self.customField.isFirstResponder)self.customField.text=WPChatAdvisor.customInstruction;
 
     UIStackView *main=[self addCard];
-    UIView *toggle=[self switchRowWithTitle:@"启用聊天参谋" detail:keySaved?@"长按桌宠滑到「参谋」，或在快捷功能里把单击、双击设为聊天参谋":@"先在下方填写 API Key"
+    UIView *toggle=[self switchRowWithTitle:@"启用聊天参谋" detail:keySaved?@"长按桌宠滑到「参谋」，或在快捷设置里把单击、双击设为聊天参谋":@"先在下方填写 API Key"
                                          on:WPChatAdvisor.isEnabled handler:^(BOOL on){[WPChatAdvisor setEnabled:on];[weakSelf changed];[weakSelf reloadCards];}];
     [main addArrangedSubview:toggle];
 
