@@ -10,4 +10,4 @@
 
 输出 `build/zhour-single-1.2.8-TrollFools.zip`，包含插件动态库和资源包。构建时从 Petdex 下载噜噜原图，校验固定的 SHA-256 后无损分割为动作条；本源码仓库不包含噜噜原图。来源与版权说明见 `ASSET-LICENSE.md`。线上桌宠库需要网络；聊天参谋需要用户单独配置模型服务，其 API 密钥使用单身版独立存储。
 
-模拟器预览使用 `./build.sh preview single`。本项目调用微信内部接口，不同微信版本的兼容性需要在真机上验证。
+无 `.bundle` 的 DEB 使用 `./build.sh deb single` 构建，输出 rootful 和 rootless 两种格式。噜噜动画内嵌动态库，首次启动时校验并存入微信私有目录；不会重置已选择的桌宠。模拟器预览使用 `./build.sh preview single` 或 `./build.sh preview-embedded single`。本项目调用微信内部接口，不同微信版本的兼容性需要在真机上验证。

@@ -42,7 +42,8 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
 }
 - (void)runChecks {
     NSMutableDictionary *checks = [NSMutableDictionary new];
-    checks[@"singleResourceBundle"] = @([WPResourceBundle().bundleURL.lastPathComponent isEqualToString:@"zhour-single.bundle"]);
+    checks[@"resourceDirectoryPresent"] = @([[NSFileManager defaultManager] fileExistsAtPath:WPResourceDirectory()]);
+    checks[@"offlineCatalogPresent"] = @([[NSFileManager defaultManager] fileExistsAtPath:[WPResourceDirectory() stringByAppendingPathComponent:@"petdex-manifest-snapshot.json"]]);
     NSData *data = [NSData dataWithContentsOfFile:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]];
     NSDictionary *metadata = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     NSString *name = metadata[@"displayName"] ?: metadata[@"name"];

@@ -5,7 +5,7 @@ MODE="${1:-device}"
 EDITION="${2:-single}"
 if [[ "$EDITION" != single ]]; then echo 'this source package builds the single edition only' >&2; exit 2; fi
 # Never package an opt-in diagnostic endpoint in a device release.
-if [[ "$MODE" == device && -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then
+if [[ ( "$MODE" == device || "$MODE" == deb ) && -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then
   echo 'Release build blocked: unset WP_RUNTIME_DIAGNOSTIC_URL before packaging.' >&2
   exit 3
 fi
@@ -38,7 +38,17 @@ if [[ "$MODE" == device ]]; then
   (cd "$STAGE" && /usr/bin/zip -qr "../../$(basename "$PACKAGE")" zhour-single.dylib zhour-single.bundle)
   file "$STAGE/zhour-single.dylib"
   otool -L "$STAGE/zhour-single.dylib"
-elif [[ "$MODE" == preview ]]; then
+elif [[ "$MODE" == deb ]]; then
+  SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+  STAGE="build/$EDITION/deb"
+  mkdir -p "$STAGE"
+  python3 Tools/build-embedded-resources.py "$STAGE/resources.bin"
+  xcrun --sdk iphoneos clang -target arm64-apple-ios16.3 -isysroot "$SDK" "${COMMON[@]}" "${EXTRA[@]}" -dynamiclib -Wl,-install_name,@rpath/zhour-single.dylib -Wl,-sectcreate,__DATA,__wpresources,"$STAGE/resources.bin" "${SOURCES[@]}" -o "$STAGE/zhour-single.dylib"
+  codesign --force --sign - "$STAGE/zhour-single.dylib"
+  for scheme in rootful rootless; do
+    python3 Tools/build-single-deb.py --dylib "$STAGE/zhour-single.dylib" --output "build/zhour-single-$RELEASE_TAG-$scheme.deb" --scheme "$scheme" --version "$VERSION"
+  done
+elif [[ "$MODE" == preview || "$MODE" == preview-embedded ]]; then
   PREVIEW_FIXTURES=(Preview/SingleMain.m)
   if [[ "${WP_SOURCE_HOOK_FIXTURE:-1}" == 1 ]]; then PREVIEW_FIXTURES+=(Preview/WPContactMocks.m Preview/WPWeChatMocks.m); fi
   SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
@@ -46,10 +56,18 @@ elif [[ "$MODE" == preview ]]; then
   # The host has no UIScene lifecycle; iOS 27 simulators stop such apps when
   # they record the iOS 27 SDK, so the link records SDK 18 instead.
   rm -rf "$APP/zhour-single.bundle"
-  mkdir -p "$APP/zhour-single.bundle"
-  xcrun --sdk iphonesimulator clang -target arm64-apple-ios16.3-simulator -isysroot "$SDK" "${COMMON[@]}" "${EXTRA[@]}" -DWP_PREVIEW_HOST=1 -Wl,-export_dynamic -Wl,-platform_version,ios-simulator,16.3,18.0 "${SOURCES[@]}" "${PREVIEW_FIXTURES[@]}" -o "$APP/WeChatPetPreview"
-  rsync -a --exclude=Yue2Pet --exclude=PetCorrections --exclude=couple-header-icon.png --exclude=BackendConfig.json --exclude=DefaultPet Resources/ "$APP/zhour-single.bundle/"
-  python3 Tools/prepare-single-lulu.py "$APP/zhour-single.bundle/DefaultPet"
+  PREVIEW_RESOURCE_LINK=(-Wno-unused-command-line-argument)
+  if [[ "$MODE" == preview-embedded ]]; then
+    python3 Tools/build-embedded-resources.py build/preview-embedded-resources.bin
+    PREVIEW_RESOURCE_LINK=(-Wl,-sectcreate,__DATA,__wpresources,build/preview-embedded-resources.bin)
+  else
+    mkdir -p "$APP/zhour-single.bundle"
+  fi
+  xcrun --sdk iphonesimulator clang -target arm64-apple-ios16.3-simulator -isysroot "$SDK" "${COMMON[@]}" "${EXTRA[@]}" -DWP_PREVIEW_HOST=1 -Wl,-export_dynamic -Wl,-platform_version,ios-simulator,16.3,18.0 "${PREVIEW_RESOURCE_LINK[@]}" "${SOURCES[@]}" "${PREVIEW_FIXTURES[@]}" -o "$APP/WeChatPetPreview"
+  if [[ "$MODE" == preview ]]; then
+    rsync -a --exclude=Yue2Pet --exclude=PetCorrections --exclude=couple-header-icon.png --exclude=BackendConfig.json --exclude=DefaultPet Resources/ "$APP/zhour-single.bundle/"
+    python3 Tools/prepare-single-lulu.py "$APP/zhour-single.bundle/DefaultPet"
+  fi
   cp Preview/Info.plist "$APP/Info.plist"
   xattr -cr "$APP"
   # File Provider can immediately re-add Finder metadata in Documents. Sign a
@@ -63,6 +81,6 @@ PY
   cp -R "$SIGN_STAGE/WeChatPetPreview.app/_CodeSignature" "$APP/"
   echo "$SIGN_STAGE/WeChatPetPreview.app" > build/preview-signed-path.txt
 else
-  echo 'usage: ./build.sh [device|preview] [single]' >&2
+  echo 'usage: ./build.sh [device|deb|preview|preview-embedded] [single]' >&2
   exit 2
 fi

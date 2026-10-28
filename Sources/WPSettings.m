@@ -383,7 +383,7 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
     report[@"recovery"]=[WPOverlayManager.sharedManager recoveryDiagnostics];
     report[@"pluginBuild"]=@(WP_BUILD_VERSION);
     report[@"chatAdvisor"]=[WPChatAdvisor diagnostics];
-    report[@"resourceBundleFound"]=@([WPResourceBundle().bundleURL.lastPathComponent isEqualToString:@"zhour-single.bundle"]);
+    report[@"resourceDirectoryFound"]=@([NSFileManager.defaultManager fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]);
     NSURL *url=[NSURL fileURLWithPath:[WPDataDirectory() stringByAppendingPathComponent:@"diagnostics.json"]];[[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToURL:url atomically:YES];
     UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];share.popoverPresentationController.sourceView=self.view;[self presentViewController:share animated:YES completion:nil];
 }

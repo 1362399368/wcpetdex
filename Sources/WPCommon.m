@@ -11,6 +11,8 @@
 NSString * const WPSelectedPetDidChangeNotification = @"WeChatPet.SelectedPetDidChange";
 NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange";
 
+extern NSString * _Nullable WPEmbeddedResourceDirectory(void);
+
 NSBundle *WPResourceBundle(void) {
     NSURL *url = [[NSBundle mainBundle] URLForResource:@"zhour-single" withExtension:@"bundle"];
     if (url) return [NSBundle bundleWithURL:url];
@@ -26,8 +28,12 @@ NSBundle *WPResourceBundle(void) {
     return [NSBundle mainBundle];
 }
 
+NSString *WPResourceDirectory(void) {
+    return WPEmbeddedResourceDirectory() ?: WPResourceBundle().resourcePath;
+}
+
 NSString *WPDefaultPetDirectory(void) {
-    return [WPResourceBundle().resourcePath stringByAppendingPathComponent:(WP_EDITION_ARIA ? @"AriaPet" : @"DefaultPet")];
+    return [WPResourceDirectory() stringByAppendingPathComponent:(WP_EDITION_ARIA ? @"AriaPet" : @"DefaultPet")];
 }
 
 NSUserDefaults *WPPreferences(void) {
@@ -85,7 +91,7 @@ NSString *WPSelectedPetDirectory(void){
     if(parts.count==2 && [parts[1] isEqual:((NSString *)parts[1]).lastPathComponent] && [parts[1] length]){
         if([parts[0] isEqual:@"downloaded"])return [WPDownloadedRoot() stringByAppendingPathComponent:parts[1]];
         if([parts[0] isEqual:@"imported"])return [[WPDataDirectory() stringByAppendingPathComponent:@"ImportedPets"] stringByAppendingPathComponent:parts[1]];
-        if([parts[0] isEqual:@"bundle"] && ([@"DefaultPet" isEqual:parts[1]] || [@"AriaPet" isEqual:parts[1]]))return [WPResourceBundle().resourcePath stringByAppendingPathComponent:parts[1]];
+        if([parts[0] isEqual:@"bundle"] && ([@"DefaultPet" isEqual:parts[1]] || [@"AriaPet" isEqual:parts[1]]))return [WPResourceDirectory() stringByAppendingPathComponent:parts[1]];
     }
     return [WPPreferences() stringForKey:@"selectedPetDirectory"];
 }
@@ -165,7 +171,7 @@ NSDictionary *WPRuntimeDiagnostics(void) {
     NSMutableArray *classNames=[@[@"CContactMgr",@"CMessageMgr",@"MMNewSessionMgr",@"MMMsgLogicManager",@"MMServiceCenter",@"MMContext",@"CAppViewControllerManager",@"CSessionInfo",@"MMSessionInfo",@"MMHeadImageMgr",@"CContact",@"SessionSelectController",@"ContactSelectViewController",@"WCRefineClearUnreadMsgHook"] mutableCopy];
 #ifdef WP_RUNTIME_DIAGNOSTIC_URL
     NSString *selected=WPSelectedPetDirectory();
-    result[@"petResources"]=@{@"bundleFound":@([WPResourceBundle().bundlePath.pathExtension isEqual:@"bundle"]),@"defaultExists":@([[NSFileManager defaultManager] fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]),@"selectedExists":@([[NSFileManager defaultManager] fileExistsAtPath:selected?:@""])};
+    result[@"petResources"]=@{@"resourceDirectoryFound":@([[NSFileManager defaultManager] fileExistsAtPath:WPResourceDirectory()]),@"defaultExists":@([[NSFileManager defaultManager] fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]),@"selectedExists":@([[NSFileManager defaultManager] fileExistsAtPath:selected?:@""])};
     NSMutableArray *imageChecks=[NSMutableArray new];
     for(NSString *directory in @[selected?:@"",WPDefaultPetDirectory()]){
         for(NSString *file in @[@"spritesheet.png",@"spritesheet.webp",@"pet.png"]){
