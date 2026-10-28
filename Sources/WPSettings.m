@@ -399,19 +399,18 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         }
         [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
     }
-    [self addSectionTitle:@"版本与诊断"];
+    [self addSectionTitle:@"关于与反馈"];
     UIStackView *about=[self addCard];
     UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"功能说明与 Telegram 交流" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
     intro.accessibilityIdentifier=@"WPPluginIntroduction";[about addArrangedSubview:intro];
     UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"交流和问题反馈" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
     group.accessibilityIdentifier=@"WPHomeTelegramGroup";[about addArrangedSubview:group];
-    NSString *wechat=[NSString stringWithFormat:@"%@ (%@)",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"未知"];
-    [about addArrangedSubview:[self rowWithTitle:@"微信版本" detail:wechat actionTitle:nil handler:nil]];
+    [self addSectionTitle:@"插件控制"];
+    UIStackView *control=[self addCard];
     UIView *pause=[self switchRowWithTitle:@"暂停插件浮层" detail:@"暂停桌宠、弹幕和快捷聊天，方便排查页面操作卡住的问题" on:WPOverlayManager.sharedManager.recoveryPaused handler:^(BOOL paused){[WPOverlayManager.sharedManager setRecoveryPaused:paused];[weakSelf reloadCards];}];
-    pause.accessibilityIdentifier=@"WPRecoveryPauseControl";[about addArrangedSubview:pause];
+    pause.accessibilityIdentifier=@"WPRecoveryPauseControl";[control addArrangedSubview:pause];
     UIView *retry=[self rowWithTitle:WPOverlayManager.sharedManager.recoveryPaused?@"恢复插件":@"重新恢复插件" detail:@"从微信设置也可进入这里恢复，无需点击桌宠" actionTitle:@"恢复" handler:^{if(WPOverlayManager.sharedManager.recoveryPaused)[WPOverlayManager.sharedManager setRecoveryPaused:NO];else [WPOverlayManager.sharedManager retryRecovery];[weakSelf reloadCards];}];
-    retry.accessibilityIdentifier=@"WPRecoveryRetryControl";[about addArrangedSubview:retry];
-    [about addArrangedSubview:[self rowWithTitle:@"导出适配诊断" detail:@"只含接口名和类型，不含聊天与联系人" actionTitle:@"导出" handler:^{[weakSelf exportDiagnostics];}]];
+    retry.accessibilityIdentifier=@"WPRecoveryRetryControl";[control addArrangedSubview:retry];
     UILabel *version=WPThemeLabel([NSString stringWithFormat:@"版本 %@ · 构建 %d · %@",WPPluginVersion(),WP_BUILD_VERSION,WPEditionName()],12,UIFontWeightRegular,WPThemeSecondaryText());version.textAlignment=NSTextAlignmentCenter;
     [self.stack addArrangedSubview:version];
 }
@@ -427,13 +426,4 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     return card;
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}
-- (void)exportDiagnostics {
-    NSMutableDictionary *report=[WPRuntimeDiagnostics() mutableCopy];
-    report[@"recovery"]=[WPOverlayManager.sharedManager recoveryDiagnostics];
-    report[@"pluginBuild"]=@(WP_BUILD_VERSION);
-    report[@"chatAdvisor"]=[WPChatAdvisor diagnostics];
-    report[@"resourceDirectoryFound"]=@([NSFileManager.defaultManager fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]);
-    NSURL *url=[NSURL fileURLWithPath:[WPDataDirectory() stringByAppendingPathComponent:@"diagnostics.json"]];[[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToURL:url atomically:YES];
-    UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];share.popoverPresentationController.sourceView=self.view;[self presentViewController:share animated:YES completion:nil];
-}
 @end

@@ -832,7 +832,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     NSString *username=WPChatPresentationUsernameForController(chat);
     if(!username.length){[self closeChatAdvisor];[self showMessage:@"先打开一个聊天，再让参谋分析。"];return;}
     NSArray<WPChatLine *> *lines=[WPChatAdvisor transcriptForChatController:chat username:username limit:WPChatAdvisor.contextCount route:NULL];
-    if(!lines){[self closeChatAdvisor];[self showMessage:@"当前微信版本还读不到聊天记录，可在设置里导出适配诊断。"];return;}
+    if(!lines){[self closeChatAdvisor];[self showMessage:@"当前微信版本还读不到聊天记录。"];return;}
     if(!lines.count){[self closeChatAdvisor];[self showMessage:@"这个聊天里还没有可分析的消息。"];return;}
     if(!self.advisorPanel){
         WPChatAdvisorPanel *panel=[[WPChatAdvisorPanel alloc] initWithFrame:CGRectZero];

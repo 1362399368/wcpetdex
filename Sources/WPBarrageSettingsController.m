@@ -174,7 +174,7 @@ static void WPBarrageIdentifyControl(UIView *row, Class controlClass, NSString *
     if(WPBarrageQuietTimeAtDate(NSDate.date))return @"当前处于安静时段";
     NSDictionary *state=[WPMessageBarrageSource.sharedSource diagnostics];
     if([state[@"accepted"] unsignedIntegerValue])return [NSString stringWithFormat:@"已收到 %lu 条有效消息；内容仅临时显示",(unsigned long)[state[@"accepted"] unsignedIntegerValue]];
-    if([state[@"muteUnknown"] unsignedIntegerValue])return @"已检测消息，但当前微信的免打扰接口待适配；可导出适配诊断";
+    if([state[@"muteUnknown"] unsignedIntegerValue])return @"已检测消息，但当前微信的免打扰接口待适配";
     if([state[@"nativeCallbacks"] unsignedIntegerValue])return @"已连接消息入口，等待符合提醒规则的新消息";
     return [state[@"route"] isEqual:@"receive-hook"]?@"消息入口已连接，等待微信前台新消息":@"正在使用兼容接收方式，等待微信前台新消息";
 }

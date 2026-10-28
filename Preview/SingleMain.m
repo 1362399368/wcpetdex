@@ -15,6 +15,12 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     return nil;
 }
 
+static BOOL WPContainsLabel(UIView *root, NSString *text) {
+    if ([root isKindOfClass:UILabel.class] && [((UILabel *)root).text isEqualToString:text]) return YES;
+    for (UIView *child in root.subviews) if (WPContainsLabel(child,text)) return YES;
+    return NO;
+}
+
 @interface WPSinglePreviewHome : UIViewController
 @end
 @implementation WPSinglePreviewHome
@@ -96,6 +102,8 @@ static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
     checks[@"pluginIntroductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction") != nil);
     checks[@"telegramEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") != nil);
+    checks[@"wechatVersionAndDiagnosticsHidden"] = @(home && !WPContainsLabel(home.view,@"微信版本") && !WPContainsLabel(home.view,@"导出适配诊断") && !WPContainsLabel(home.view,@"版本与诊断"));
+    checks[@"recoveryControlsStillAvailable"] = @(home && WPFindIdentifiedView(home.view,@"WPRecoveryPauseControl") && WPFindIdentifiedView(home.view,@"WPRecoveryRetryControl"));
     UIViewController *intro = [NSClassFromString(@"WPPluginIntroductionController") new];
     intro.view.frame = self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
     checks[@"telegramInIntroductionVisible"] = @(intro && WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup") != nil);
