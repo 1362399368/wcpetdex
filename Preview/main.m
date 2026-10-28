@@ -11,6 +11,7 @@
 #import "WPPartnerContact.h"
 #import "WPTapActions.h"
 #import "WPStabilityChecks.h"
+#import "WPChatAdvisorChecks.h"
 #import "WPYue2Checks.h"
 #import "WPLocalPreviewChecks.h"
 #import "WPComfortChecks.h"
@@ -183,6 +184,15 @@ static UILabel *WPPreviewLabelWithText(UIView *root, NSString *text){
         [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil]
             writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"work-checkin-report.json"] atomically:YES];
     }
+    if([NSProcessInfo.processInfo.arguments containsObject:@"--chat-advisor-self-test"])dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{
+        NSString *base=nil;
+        for(NSString *argument in NSProcessInfo.processInfo.arguments)if([argument hasPrefix:@"--chat-advisor-base="])base=[argument substringFromIndex:20];
+        WPChatAdvisorRunPreviewChecks(self.window,[self overlay],base,^(NSDictionary *results){
+            BOOL all=YES;for(NSNumber *value in results.allValues)all&=value.boolValue;
+            NSDictionary *report=@{@"caseCount":@(results.count),@"allPassed":@(all),@"results":results,@"finished":@YES,@"build":@(WP_BUILD_VERSION)};
+            [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil] writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"chat-advisor-report.json"] atomically:YES];
+        });
+    });
     if([NSProcessInfo.processInfo.arguments containsObject:@"--unified-dock-self-test"])dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{
         WPUnifiedDock122RunPreviewChecks(self.window,[self overlay],^(NSDictionary *results){
             BOOL all=YES;for(id value in results.allValues)if([value isKindOfClass:NSNumber.class])all&=[value boolValue];
