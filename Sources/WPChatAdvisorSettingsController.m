@@ -1,6 +1,8 @@
 #import "WPChatAdvisorSettingsController.h"
 #import "WPChatAdvisor.h"
 #import "WPCommon.h"
+#import "WPAdvisorContinuousCoordinator.h"
+#import "WPPartnerContact.h"
 
 /// Lists the account's chat models from the provider and saves the picked one.
 @interface WPChatAdvisorModelPicker : UITableViewController <UISearchResultsUpdating>
@@ -67,6 +69,7 @@
 - (void)changed {[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];}
 - (void)buildCards {
     __weak typeof(self) weakSelf=self;
+    [WPAdvisorContinuousCoordinator.sharedCoordinator refreshAccountIfNeeded];
     BOOL keySaved=WPChatAdvisor.hasAPIKey;
     self.keyField.placeholder=keySaved?@"已保存，留空保持不变":@"sk-…";
     if(!self.urlField.isFirstResponder)self.urlField.text=[WPChatAdvisor.baseURL isEqualToString:WPChatAdvisorDefaultBaseURL]?@"":WPChatAdvisor.baseURL;
@@ -108,7 +111,35 @@
     [context addArrangedSubview:[self sliderRowWithTitle:@"分析最近的消息条数" value:WPChatAdvisor.contextCount minimum:6 maximum:40
         format:^NSString *(float value){return [NSString stringWithFormat:@"%.0f 条",value];}
         handler:^(float value){[WPChatAdvisor setContextCount:(NSUInteger)lroundf(value)];}]];
-    [self addNote:@"分析时，当前聊天里最近这些条文字（图片、语音等只记类型）会发送到上面的模型服务，不会保存在插件里。群聊成员只以「成员1」「成员2」区分，不发送昵称和微信号。"];
+    [self addNote:@"分析时聊天文字（图片、语音等只记类型）会发送到配置的模型服务；原始消息只在内存短暂保留，分析结果最多在本机保留三天。群聊成员只以「成员1」「成员2」区分，不发送昵称和微信号。"];
+
+    [self addSectionTitle:@"连续对话"];
+    UIStackView *continuousCard=[self addCard];
+    WPAdvisorContinuousCoordinator *continuous=WPAdvisorContinuousCoordinator.sharedCoordinator;
+    NSString *locked=continuous.lockedUsername;
+    NSString *display=locked.length?[WPPartnerContact displayNameForUsername:locked]:@"";
+    [continuousCard addArrangedSubview:[self rowWithTitle:@"锁定私聊联系人" detail:locked.length?(display.length?display:@"已选择联系人"):@"选择要开启连续对话的联系人" actionTitle:@"选择" handler:^{
+        WPPartnerPickerController *picker=[[WPPartnerPickerController alloc] initWithStyle:UITableViewStyleInsetGrouped];picker.pickerTitle=@"选择连续对话联系人";
+        picker.selectionHandler=^(NSString *username,__unused NSString *name){[WPAdvisorContinuousCoordinator.sharedCoordinator setLockedUsername:username];};
+        [weakSelf.navigationController pushViewController:picker animated:YES];
+    }]];
+    [continuousCard addArrangedSubview:[self switchRowWithTitle:@"开启连续对话" detail:@"对方停止发消息 30 秒后合并分析；微信需在前台" on:continuous.isEnabled handler:^(BOOL enabled){
+        if(enabled && !WPAdvisorContinuousCoordinator.sharedCoordinator.lockedUsername.length){[weakSelf alert:@"请先选择私聊联系人。"];[weakSelf reloadCards];return;}
+        if(enabled && !WPChatAdvisor.isReady){[weakSelf alert:@"请先启用聊天参谋并配置 API Key。"];[weakSelf reloadCards];return;}
+        [WPAdvisorContinuousCoordinator.sharedCoordinator setEnabled:enabled];
+        if(enabled && !WPAdvisorContinuousCoordinator.sharedCoordinator.enabled)[weakSelf alert:@"最多同时开启 8 个私聊，请先关闭其他联系人。"];
+        [weakSelf reloadCards];
+    }]];
+    if(locked.length)[continuousCard addArrangedSubview:[self rowWithTitle:@"解除锁定" detail:@"关闭连续对话并移除所选联系人" actionTitle:@"解除" handler:^{[WPAdvisorContinuousCoordinator.sharedCoordinator setLockedUsername:nil];[weakSelf reloadCards];}]];
+    if(continuous.enabledUsernames.count){
+        [self addSectionTitle:@"已开启的私聊"];
+        UIStackView *enabledCard=[self addCard];
+        for(NSString *username in continuous.enabledUsernames){
+            NSString *name=[WPPartnerContact displayNameForUsername:username];
+            [enabledCard addArrangedSubview:[self rowWithTitle:name.length?name:@"私聊联系人" detail:@"单独设置或关闭" actionTitle:@"管理" handler:^{[WPAdvisorContinuousCoordinator.sharedCoordinator setLockedUsername:username];[weakSelf reloadCards];}]];
+        }
+    }
+    [self addNote:@"最多为 8 个私聊分别开启。需先打开对应聊天一次以加载上下文；切换账号、内存紧张或重新启动后可能需重新打开。微信须在前台；接口不兼容可能无法触发。模型服务可能产生费用。"];
 }
 - (void)saveCustom {
     if(self.customField)[WPChatAdvisor setCustomInstruction:self.customField.text ?: @""];

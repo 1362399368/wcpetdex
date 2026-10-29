@@ -5,8 +5,8 @@
 static NSString * const WPMenuOrderKey=@"radialMenuOrder";
 static NSString * const WPMenuEnabledKey=@"radialMenuEnabled";
 
-NSArray<NSString *> *WPMenuAvailableActions(void){return @[@"read",@"advisor",@"moments",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3"];}
-NSString *WPMenuActionTitle(NSString *identifier){return @{@"read":@"一键已读",@"advisor":@"聊天参谋",@"moments":@"朋友圈",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"contact1":@"快捷联系人 1",@"contact2":@"快捷联系人 2",@"contact3":@"快捷联系人 3"}[identifier]?:@"";}
+NSArray<NSString *> *WPMenuAvailableActions(void){return @[@"read",@"advisor",@"moments",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory"];}
+NSString *WPMenuActionTitle(NSString *identifier){return @{@"read":@"一键已读",@"advisor":@"聊天参谋",@"advisorHistory":@"参谋记录",@"moments":@"朋友圈",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"contact1":@"快捷联系人 1",@"contact2":@"快捷联系人 2",@"contact3":@"快捷联系人 3"}[identifier]?:@"";}
 static BOOL WPMenuIsContact(NSString *identifier){return [@[@"contact1",@"contact2",@"contact3"] containsObject:identifier];}
 NSString *WPMenuContactUsername(NSString *identifier){
     if(!WPMenuIsContact(identifier))return nil;

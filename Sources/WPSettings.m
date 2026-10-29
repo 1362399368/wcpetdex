@@ -137,8 +137,8 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     return column;
 }
 - (UIView *)gestureActionRow:(BOOL)longPress {
-    NSArray<NSString *> *values=longPress?@[@"menu",@"quickChat",@"settings",@"moments",@"advisor",@"none"]:@[@"quickChat",@"settings",@"moments",@"advisor",@"none"];
-    NSDictionary *names=@{@"menu":@"快捷菜单",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"moments":@"朋友圈",@"advisor":@"聊天参谋",@"none":@"不执行"};
+    NSArray<NSString *> *values=longPress?@[@"menu",@"quickChat",@"settings",@"moments",@"advisor",@"advisorHistory",@"none"]:@[@"quickChat",@"settings",@"moments",@"advisor",@"advisorHistory",@"none"];
+    NSDictionary *names=@{@"menu":@"快捷菜单",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"moments":@"朋友圈",@"advisor":@"聊天参谋",@"advisorHistory":@"参谋记录",@"none":@"不执行"};
     NSString *title=longPress?@"长按桌宠":@"摇晃桌宠";
     NSString *selected=WPConfiguredGestureAction(longPress);
     __weak typeof(self) weakSelf=self;

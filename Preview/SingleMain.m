@@ -11,6 +11,12 @@
 #import "WPMenuConfigurationChecks.h"
 #import "WPQuickAvatarGestureChecks.h"
 #import "WPHomePresentationChecks.h"
+#import "WPAdvisorStatusChecks.h"
+#import "WPAdvisorContinuousChecks.h"
+extern NSDictionary *WPAdvisorTaskCenterPreviewChecks(void);
+extern NSDictionary *WPAdvisorReplyPreviewChecks(void);
+extern NSDictionary *WPAdvisorContextPreviewChecks(void);
+extern void WPAdvisorIncomingHookChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 extern void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
@@ -167,6 +173,13 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     [checks addEntriesFromDictionary:WPMenuConfigurationPreviewChecks()];
     [checks addEntriesFromDictionary:WPQuickAvatarGestureChecks()];
     [checks addEntriesFromDictionary:WPHomePresentationChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorStatusPreviewChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorTaskCenterPreviewChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorContinuousChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorReplyPreviewChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorContextPreviewChecks()];
+    WPAdvisorIncomingHookChecks(^(NSDictionary<NSString *,NSNumber *> *hookChecks){
+    [checks addEntriesFromDictionary:hookChecks];
     WPAdvisorProviderPreviewChecks(^(NSDictionary<NSString *,NSNumber *> *providerChecks){
         [checks addEntriesFromDictionary:providerChecks];
         BOOL all = YES;
@@ -174,6 +187,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
         NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
         NSData *out = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];
         [out writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"single-preview-report.json"] atomically:YES];
+    });
     });
 }
 @end

@@ -81,7 +81,15 @@ void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,N
                     [WPChatAdvisor setBaseURL:@"https://example.test/v1"];
                     [WPChatAdvisor fetchModels:^(__unused NSArray *other,NSString *otherError){
                         r[@"genericProviderUsesStandardModelPath"]=@(!otherError && [WPAdvisorMockRequests.lastObject.URL.absoluteString isEqual:@"https://example.test/v1/models"]);
-                        finish();
+                        __block BOOL called=NO;
+                        WPChatAdvisorRequest *token=[WPChatAdvisor startAnalysisOfLines:lines group:NO completion:^(__unused WPChatAdvice *a,__unused NSString *e){called=YES;}];
+                        NSURLSessionTask *network=[token valueForKey:@"task"];
+                        [token cancel];
+                        BOOL sentCancel=network && network.state!=NSURLSessionTaskStateRunning;
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,200*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
+                            r[@"advisorCancellationStopsNetworkAndCallback"]=@(sentCancel && !called);
+                            finish();
+                        });
                     }];
                 }];
             }];

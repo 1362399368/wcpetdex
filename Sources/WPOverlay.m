@@ -27,6 +27,11 @@
 #import "WPSessionEligibility.h"
 #import "WPChatAdvisor.h"
 #import "WPChatAdvisorPanel.h"
+#import "WPAdvisorReplyAction.h"
+#import "WPAdvisorTaskCenter.h"
+#import "WPAdvisorStatusView.h"
+#import "WPAdvisorContinuousCoordinator.h"
+#import "WPAdvisorContextStore.h"
 
 @interface WPOverlayManager (WPChatHostPreparation)
 - (UIWindow *)prepareChatHost:(UIWindow *)preferred;
@@ -132,7 +137,10 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 @property (nonatomic) UILabel *chatCount;
 @property (nonatomic) NSMutableArray<WPQuickChatAvatarPreparation *> *arrivalAvatarJobs;
 @property (nonatomic) WPChatAdvisorPanel *advisorPanel;
-@property (nonatomic) NSUInteger advisorGeneration;
+@property (nonatomic) WPAdvisorTask *advisorDisplayedTask;
+@property (nonatomic) WPAdvisorStatusView *advisorStatus;
+@property (nonatomic) NSMutableDictionary<NSString *,WPAdvisorTask *> *advisorObservedTasks;
+@property (nonatomic) NSMutableSet<NSString *> *advisorAutomaticTasks;
 - (void)applySettings;
 - (void)closeQuickChat;
 - (void)cancelActiveGesture;
@@ -143,6 +151,15 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 - (void)layoutBarrage;
 - (void)openQuickChat:(NSString *)username mode:(NSInteger)mode;
 - (void)presentQuickChatMenu:(NSString *)username;
+- (void)advisorTasksChanged:(nullable NSNotification *)notification;
+- (void)cancelAdvisorTask:(NSString *)identifier;
+- (void)showAdvisorTaskList;
+- (void)showAdvisorHistory;
+- (void)openAdvisorUnread;
+- (void)openAdvisorTask:(WPAdvisorTask *)task;
+- (void)showAdvisorTask:(WPAdvisorTask *)task;
+- (void)applyAdvisorReply:(NSString *)reply send:(BOOL)send;
+- (void)seedAdvisorContext;
 @end
 
 @implementation WPOverlayController
@@ -188,6 +205,12 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     self.chatCount.textAlignment=NSTextAlignmentCenter;self.chatCount.layer.cornerRadius=9;self.chatCount.clipsToBounds=YES;
     self.chatCount.userInteractionEnabled=NO;self.chatCount.hidden=YES;[self.view addSubview:self.chatCount];
     self.arrivals=[UIView new];self.arrivals.userInteractionEnabled=YES;self.arrivals.hidden=YES;[self.view addSubview:self.arrivals];self.arrivalAvatarJobs=[NSMutableArray new];
+    self.advisorObservedTasks=[NSMutableDictionary new];self.advisorAutomaticTasks=[NSMutableSet new];
+    self.advisorStatus=[[WPAdvisorStatusView alloc] initWithFrame:self.view.bounds];
+    self.advisorStatus.onCancelTask=^(NSString *identifier){[weakSelf cancelAdvisorTask:identifier];};
+    self.advisorStatus.onShowTasks=^{[weakSelf showAdvisorTaskList];};
+    self.advisorStatus.onOpenUnread=^{[weakSelf openAdvisorUnread];};
+    [self.view addSubview:self.advisorStatus];
     UIPanGestureRecognizer *drag = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(drag:)];
     drag.maximumNumberOfTouches = 1;
     UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(hold:)];
@@ -212,8 +235,10 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     [center addObserver:self selector:@selector(clearBarrageDock) name:WPBarrageClearDockNotification object:nil];
     [center addObserver:self selector:@selector(chatPresentationChanged:) name:WPChatPresentationDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(barrageMemoryWarning:) name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
+    [center addObserver:self selector:@selector(advisorTasksChanged:) name:WPAdvisorTasksDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(previewBarrage:) name:WPBarragePreviewNotification object:nil];
     [self applySettings];
+    [self advisorTasksChanged:nil];
     [self resetIdle];
 }
 - (void)viewDidLayoutSubviews {
@@ -238,7 +263,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     if(self.advisorPanel)[self.advisorPanel layoutInBounds:[self safeArea]];
     if(self.positioned && !self.peeking)[self resetIdle];
 }
-- (void)viewDidAppear:(BOOL)animated {[super viewDidAppear:animated];[self resetIdle];}
+- (void)viewDidAppear:(BOOL)animated {[super viewDidAppear:animated];[self resetIdle];[self seedAdvisorContext];}
 - (void)layoutIndicators {
     CGRect safe=[self safeArea];
     CGPoint unreadOffset=WPUnreadAvatarOffset();
@@ -246,6 +271,8 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
                                     CGRectGetMinY(self.pet.frame)-8-self.unreadDot.bounds.size.height/2+unreadOffset.y);
     self.unreadDot.center=WPIndicatorCenter(unreadCenter,self.unreadDot.bounds.size,safe);
     self.chatCount.frame=CGRectMake(CGRectGetMinX(self.pet.frame)-2,CGRectGetMinY(self.pet.frame)-8,24,18);
+    [self.advisorStatus setUnreadAvatarFrame:self.unreadDot.hidden?CGRectNull:self.unreadDot.frame];
+    [self.advisorStatus layoutInBounds:safe petFrame:self.pet.frame petVisible:!self.pet.hidden && !self.view.hidden];
     [self layoutBubble];
     [self layoutBarrage];
 }
@@ -378,8 +405,11 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     [self.unreadDot.layer addAnimation:group forKey:@"WPMessageHeadPop123"];
 }
 - (void)chatPresentationChanged:(NSNotification *)note {
+    [WPAdvisorContinuousCoordinator.sharedCoordinator refreshAccountIfNeeded];
     [self refreshBarrageState];[self updateUnreadDot];
-    // The card belongs to one conversation; leaving it discards the advice.
+    [self seedAdvisorContext];
+    [WPAdvisorContinuousCoordinator.sharedCoordinator retryPending];
+    // The card belongs to one conversation; the saved result remains available.
     if(self.advisorPanel && ![WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:self.advisorPanel.conversationUsername])[self closeChatAdvisor];
 }
 - (void)quickChatChanged:(NSNotification *)note {
@@ -620,6 +650,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     self.edgeTransitioning=NO;
 }
 - (void)applySettings {
+    [WPAdvisorContinuousCoordinator.sharedCoordinator refreshAccountIfNeeded];
     CGFloat size = MAX(48, MIN(160, [WPPreferences() doubleForKey:@"petSize"]));
     // Window bounds can still be empty during initial view loading.
     CGFloat available=[self safeArea].size.height;
@@ -648,6 +679,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     [self.view setNeedsLayout];
     [self refreshBarrageState];
     [self updateUnreadDot];
+    [self seedAdvisorContext];
     [self resetIdle];
 }
 - (void)reloadPet { self.positioned=NO;[self.pet reloadPet]; [self applySettings]; }
@@ -683,6 +715,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     if ([action isEqualToString:@"quickChat"]) [self performTapAction:WPTapActionQuickChat];
     else if ([action isEqualToString:@"settings"]) [self settings];
     else if ([action isEqualToString:@"advisor"]) [self openChatAdvisor];
+    else if ([action isEqualToString:@"advisorHistory"]) [self showAdvisorHistory];
     else if ([action isEqualToString:@"moments"]) [self execute:@"moments"];
 }
 - (void)shakeDetected {
@@ -819,6 +852,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
         return;
     }
     if([action isEqualToString:@"advisor"]){[self openChatAdvisor];return;}
+    if([action isEqualToString:@"advisorHistory"]){[self showAdvisorHistory];return;}
     if([action isEqualToString:@"quickChat"]){[self performTapAction:WPTapActionQuickChat];return;}
     if([action isEqualToString:@"settings"]){[self settings];return;}
     if([action isEqualToString:@"read"])[self showMessage:@"正在一键已读…"];
@@ -831,9 +865,18 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     UIWindow *host=self.hostWindow;
     return host && !host.hidden?WPChatPresentationVisibleChatController(host.rootViewController,host):nil;
 }
+- (void)seedAdvisorContext {
+    if(!NSThread.isMainThread || !self.isViewLoaded)return;
+    UIViewController *chat=[self visibleChatController];NSString *username=WPChatPresentationUsernameForController(chat);
+    if(!username.length || ![WPAdvisorContinuousCoordinator.sharedCoordinator isEnabledForUsername:username])return;
+    if(![WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:username])return;
+    NSArray *lines=[WPChatAdvisor transcriptForChatController:chat username:username limit:40 route:NULL];
+    if(lines.count)[WPAdvisorContextStore.sharedStore seedUsername:username visibleLines:lines];
+}
 - (void)openChatAdvisor {
     [self closeQuickChat];
     if(!WPChatAdvisor.isReady){[self showMessage:WPChatAdvisor.hasAPIKey?@"聊天参谋未启用，可在设置首页打开。":@"请先在设置首页的「聊天参谋」里填写 API Key。"];return;}
+    if(!WPAdvisorCurrentAccountFingerprint().length){[self showMessage:@"无法确认当前微信账号，暂不能分析。"] ;return;}
     self.hostWindow=[[WPOverlayManager sharedManager] prepareChatHost:self.hostWindow];
     UIViewController *chat=[self visibleChatController];
     NSString *username=WPChatPresentationUsernameForController(chat);
@@ -841,36 +884,137 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     NSArray<WPChatLine *> *lines=[WPChatAdvisor transcriptForChatController:chat username:username limit:WPChatAdvisor.contextCount route:NULL];
     if(!lines){[self closeChatAdvisor];[self showMessage:@"当前微信版本暂时无法读取聊天记录。"];return;}
     if(!lines.count){[self closeChatAdvisor];[self showMessage:@"这个聊天里还没有可分析的消息。"];return;}
+    [self closeChatAdvisor];
+    NSString *name=[WPPartnerContact displayNameForUsername:username]?:@"联系人";
+    WPAdvisorTask *task=[WPAdvisorTaskCenter.sharedCenter submitUsername:username displayName:name lines:lines group:[username hasSuffix:@"@chatroom"]];
+    if(!task)[self showMessage:@"分析队列已满，请稍后再试。"];else [self advisorTasksChanged:nil];
+}
+- (void)showAdvisorTask:(WPAdvisorTask *)task {
+    if(!WPAdvisorTaskBelongsToCurrentAccount(task) || !task.advice || ![WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:task.username])return;
+    NSArray *current=[WPChatAdvisor transcriptForChatController:[self visibleChatController] username:task.username limit:task.lineCount route:NULL];
+    if(!WPAdvisorTaskMatchesLines(task,current))[WPAdvisorTaskCenter.sharedCenter markStaleForUsername:task.username];
     if(!self.advisorPanel){
         WPChatAdvisorPanel *panel=[[WPChatAdvisorPanel alloc] initWithFrame:CGRectZero];
         __weak typeof(self) weakSelf=self;
         panel.onClose=^{[weakSelf closeChatAdvisor];};
         panel.onRetry=^{[weakSelf openChatAdvisor];};
-        panel.onPickReply=^(NSString *reply){[weakSelf fillAdvisorReply:reply];};
+        panel.onPickReply=^(NSString *reply){[weakSelf applyAdvisorReply:reply send:NO];};
+        panel.onSendReply=^(NSString *reply){[weakSelf applyAdvisorReply:reply send:YES];};
         [self.view insertSubview:panel belowSubview:self.pet];
         self.advisorPanel=panel;
     }
-    self.advisorPanel.conversationUsername=username;
-    NSUInteger generation=++self.advisorGeneration,count=lines.count;
-    [self.advisorPanel showLoadingWithLineCount:count];[self.advisorPanel layoutInBounds:[self safeArea]];
-    __weak typeof(self) weakSelf=self;
-    [WPChatAdvisor analyzeLines:lines group:[username hasSuffix:@"@chatroom"] completion:^(WPChatAdvice *advice,NSString *error){
-        if(weakSelf.advisorGeneration!=generation || !weakSelf.advisorPanel)return;
-        if(advice)[weakSelf.advisorPanel showAdvice:advice lineCount:count];
-        else [weakSelf.advisorPanel showError:error];
-    }];
+    self.advisorDisplayedTask=task;self.advisorPanel.conversationUsername=task.username;
+    [self.advisorPanel showAdvice:task.advice lineCount:task.lineCount];[self.advisorPanel layoutInBounds:[self safeArea]];
+    [WPAdvisorTaskCenter.sharedCenter markResultRead:task];
+    if(task.stale)[self showMessage:@"这条建议生成后又有新消息，可重新分析。"];
 }
-- (void)fillAdvisorReply:(NSString *)reply {
+- (void)applyAdvisorReply:(NSString *)reply send:(BOOL)send {
     UIViewController *chat=[self visibleChatController];
-    if(![WPChatPresentationUsernameForController(chat) isEqualToString:self.advisorPanel.conversationUsername]){[self closeChatAdvisor];[self showMessage:@"聊天已切换，没有填入。"];return;}
-    BOOL filled=[WPChatAdvisor fillReply:reply intoChatController:chat];
-    if(!filled)UIPasteboard.generalPasteboard.string=reply;
-    [self closeChatAdvisor];
-    [self showMessage:filled?@"已填入输入框，确认后再发送":@"没找到输入框，已复制，可以直接粘贴"];
+    WPAdvisorTask *task=self.advisorDisplayedTask;if(!task)return;
+    if(!WPAdvisorTaskBelongsToCurrentAccount(task)){[self closeChatAdvisor];[self showMessage:@"微信账号已变化，没有执行操作。"] ;return;}
+    if(send && task.stale){[self showMessage:@"有新消息，请重新分析后再发送。"];return;}
+    if(send){NSArray *current=[WPChatAdvisor transcriptForChatController:chat username:task.username limit:task.lineCount route:NULL];
+        if(!WPAdvisorTaskMatchesLines(task,current)){[WPAdvisorTaskCenter.sharedCenter markStaleForUsername:task.username];[self showMessage:@"无法确认聊天内容未变化，请重新分析后再发送。"] ;return;}}
+    WPAdvisorReplyOutcome outcome=WPAdvisorApplyReply(reply,task.username,chat,send);
+    switch(outcome){
+        case WPAdvisorReplyFilled:[self closeChatAdvisor];[self showMessage:@"已填入聊天输入框。"];break;
+        case WPAdvisorReplySendTriggered:[self closeChatAdvisor];[self showMessage:@"已触发发送，请留意聊天结果。"];break;
+        case WPAdvisorReplyDraftPresent:[self showMessage:@"输入框有未发送的草稿，请先处理草稿。"] ;break;
+        case WPAdvisorReplyWrongChat:[self closeChatAdvisor];[self showMessage:@"聊天已切换，没有执行操作。"] ;break;
+        case WPAdvisorReplyInputUnavailable:[self showMessage:@"当前微信版本无法识别聊天输入框。"] ;break;
+        case WPAdvisorReplySendUnavailable:[self closeChatAdvisor];[self showMessage:@"无法确认发送按钮，内容已保留在输入框。"] ;break;
+    }
 }
 - (void)closeChatAdvisor {
-    self.advisorGeneration++;
-    [self.advisorPanel removeFromSuperview];self.advisorPanel=nil;
+    [self.advisorPanel removeFromSuperview];self.advisorPanel=nil;self.advisorDisplayedTask=nil;
+}
+- (WPAdvisorTask *)advisorTaskWithIdentifier:(NSString *)identifier {
+    WPAdvisorTaskCenter *center=WPAdvisorTaskCenter.sharedCenter;
+    for(WPAdvisorTask *task in [center.activeTasks arrayByAddingObjectsFromArray:[center.history arrayByAddingObjectsFromArray:center.failedTasks]])
+        if([task.identifier isEqualToString:identifier])return task;
+    return nil;
+}
+- (void)advisorTasksChanged:(NSNotification *)notification {
+    WPAdvisorTaskCenter *center=WPAdvisorTaskCenter.sharedCenter;
+    if(self.advisorDisplayedTask && !WPAdvisorTaskBelongsToCurrentAccount(self.advisorDisplayedTask))[self closeChatAdvisor];
+    NSMutableArray *items=[NSMutableArray new];
+    for(WPAdvisorTask *task in center.activeTasks){
+        self.advisorObservedTasks[task.identifier]=task;
+        [items addObject:@{@"identifier":task.identifier,@"displayName":task.displayName,@"state":task.state==WPAdvisorTaskQueued?@"排队中":@"生成中"}];
+    }
+    for(WPAdvisorTask *task in center.failedTasks)
+        [items addObject:@{@"identifier":task.identifier,@"displayName":task.displayName,@"state":@"失败 · 点击查看"}];
+    [self.advisorStatus updateActiveTasks:items];[self.advisorStatus updateUnreadCount:center.unreadResults.count];
+    [self.advisorStatus setUnreadAvatarFrame:self.unreadDot.hidden?CGRectNull:self.unreadDot.frame];
+    [self.advisorStatus layoutInBounds:[self safeArea] petFrame:self.pet.frame petVisible:!self.pet.hidden && !self.view.hidden];
+    for(NSString *identifier in self.advisorObservedTasks.allKeys.copy){
+        WPAdvisorTask *task=self.advisorObservedTasks[identifier];
+        if(task.state==WPAdvisorTaskQueued || task.state==WPAdvisorTaskRunning)continue;
+        BOOL automatic=[self.advisorAutomaticTasks containsObject:identifier];
+        [self.advisorAutomaticTasks removeObject:identifier];[self.advisorObservedTasks removeObjectForKey:identifier];
+        [WPAdvisorContinuousCoordinator.sharedCoordinator taskDidFinishForUsername:task.username];
+        if(automatic && task.state==WPAdvisorTaskCompleted && [WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:task.username])
+            [self showAdvisorTask:task];
+    }
+}
+- (void)cancelAdvisorTask:(NSString *)identifier {
+    WPAdvisorTask *task=[self advisorTaskWithIdentifier:identifier];if(!task)return;
+    if(task.state==WPAdvisorTaskFailed){[self showMessage:task.error?:@"分析失败，请重试。"];[WPAdvisorTaskCenter.sharedCenter dismissFailedTask:task];return;}
+    [WPAdvisorTaskCenter.sharedCenter cancelTask:task];
+}
+- (NSArray<NSDictionary *> *)advisorRecords:(NSArray<WPAdvisorTask *> *)tasks {
+    NSMutableArray *records=[NSMutableArray new];
+    for(WPAdvisorTask *task in tasks){
+        NSString *detail=task.state==WPAdvisorTaskQueued?@"排队中":task.state==WPAdvisorTaskRunning?@"生成中":task.state==WPAdvisorTaskFailed?(task.error?:@"分析失败"):(task.stale?@"有新消息，建议已过期":@"查看分析与建议");
+        [records addObject:@{@"identifier":task.identifier,@"displayName":task.displayName,@"detail":detail,@"unread":@(task.unread),@"createdAt":task.createdAt}];
+    }
+    return records;
+}
+- (void)presentAdvisorList:(NSArray<WPAdvisorTask *> *)tasks title:(NSString *)title kind:(NSInteger)kind {
+    self.hostWindow=[[WPOverlayManager sharedManager] prepareChatHost:self.hostWindow];
+    UIViewController *presenter=[WPPartnerContact visibleController:self.hostWindow.rootViewController];
+    if(!presenter || presenter.transitionCoordinator)return;
+    WPAdvisorHistoryController *list=[[WPAdvisorHistoryController alloc] initWithTitle:title records:[self advisorRecords:tasks] allowsClear:kind==2];
+    WPAdaptiveNavigationController *navigation=[[WPAdaptiveNavigationController alloc] initWithRootViewController:list];
+    __weak typeof(self) weakSelf=self;__weak WPAdvisorHistoryController *weakList=list;
+    list.onSelect=^(NSString *identifier){
+        [weakList dismissViewControllerAnimated:YES completion:^{
+            WPAdvisorTask *task=[weakSelf advisorTaskWithIdentifier:identifier];if(!task)return;
+            if(kind==0)[weakSelf cancelAdvisorTask:identifier];else [weakSelf openAdvisorTask:task];
+        }];
+    };
+    list.onClear=^{[WPAdvisorTaskCenter.sharedCenter clearHistory];[weakList updateRecords:@[]];};
+    [presenter presentViewController:navigation animated:YES completion:nil];
+}
+- (void)showAdvisorTaskList {
+    WPAdvisorTaskCenter *center=WPAdvisorTaskCenter.sharedCenter;
+    [self presentAdvisorList:[center.activeTasks arrayByAddingObjectsFromArray:center.failedTasks] title:@"分析任务 · 点击取消或查看" kind:0];
+}
+- (void)showAdvisorHistory {
+    [self closeQuickChat];[self presentAdvisorList:WPAdvisorTaskCenter.sharedCenter.history title:@"聊天参谋记录" kind:2];
+}
+- (void)openAdvisorUnread {
+    NSArray *results=WPAdvisorTaskCenter.sharedCenter.unreadResults;
+    if(results.count==1)[self openAdvisorTask:results.firstObject];
+    else if(results.count)[self presentAdvisorList:results title:@"选择聊天参谋结果" kind:1];
+}
+- (void)waitForAdvisorTask:(WPAdvisorTask *)task attempt:(NSUInteger)attempt {
+    if(!WPAdvisorTaskBelongsToCurrentAccount(task) || ![WPAdvisorTaskCenter.sharedCenter.history containsObject:task])return;
+    self.hostWindow=[[WPOverlayManager sharedManager] prepareChatHost:self.hostWindow];
+    if([WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:task.username]){[self showAdvisorTask:task];return;}
+    if(attempt>=12){[self showMessage:@"没有找到对应聊天，结果已保留。"] ;return;}
+    __weak typeof(self) weakSelf=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,200*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[weakSelf waitForAdvisorTask:task attempt:attempt+1];});
+}
+- (void)openAdvisorTask:(WPAdvisorTask *)task {
+    if(!WPAdvisorTaskBelongsToCurrentAccount(task) || !task.advice)return;
+    self.hostWindow=[[WPOverlayManager sharedManager] prepareChatHost:self.hostWindow];
+    if([WPChatPresentationActiveUsernameInWindow(self.hostWindow) isEqualToString:task.username]){[self showAdvisorTask:task];return;}
+    [self closeQuickChat];[[WPOverlayManager sharedManager] closePanel];
+    __weak typeof(self) weakSelf=self;
+    [WPPartnerContact openConversationWithUsername:task.username inWindow:self.hostWindow presentationMode:3 completion:^(BOOL success,NSString *message){
+        if(!success){[weakSelf showMessage:message?:@"无法打开聊天，结果已保留。"] ;return;}
+        [weakSelf waitForAdvisorTask:task attempt:0];
+    }];
 }
 - (void)layoutBubble {
     CGRect safe=[self safeArea];CGFloat width=MAX(1,MIN(194,safe.size.width));
@@ -911,6 +1055,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 @property(nonatomic) BOOL maintenanceReady;
 @property(nonatomic) NSUInteger preparedGeneration;
 @property(nonatomic) NSMutableSet<NSString *> *degradedFeatures;
+@property(nonatomic) NSMutableSet<NSString *> *advisorContextHints;
 @end
 
 @implementation WPOverlayManager
@@ -920,7 +1065,9 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     WPBarrageStartEnvironmentMonitor();
     self.windows=[NSMapTable weakToStrongObjectsMapTable];
     self.degradedFeatures=[NSMutableSet new];
+    self.advisorContextHints=[NSMutableSet new];
     [self configureRecovery];
+    [self configureAdvisorContinuous];
     NSNotificationCenter *center=NSNotificationCenter.defaultCenter;
     for(NSString *name in @[UIApplicationDidBecomeActiveNotification,UIApplicationWillResignActiveNotification,UIApplicationDidFinishLaunchingNotification,UISceneDidActivateNotification,UISceneWillDeactivateNotification,UIWindowDidBecomeVisibleNotification,UIWindowDidBecomeKeyNotification])
         [center addObserver:self selector:@selector(stateChanged:) name:name object:nil];
@@ -937,6 +1084,30 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
     for(WPOverlayWindow *window in self.windows.objectEnumerator)if(window.rootViewController)[result addObject:window.rootViewController];
     if(self.legacyWindow.rootViewController)[result addObject:self.legacyWindow.rootViewController];
     return result;
+}
+- (void)configureAdvisorContinuous {
+    WPAdvisorContinuousCoordinator *coordinator=WPAdvisorContinuousCoordinator.sharedCoordinator;
+    __weak typeof(self) weakSelf=self;
+    coordinator.onIncoming=^(NSString *username){[WPAdvisorTaskCenter.sharedCenter markStaleForUsername:username];};
+    coordinator.onMessage=^(NSString *username,NSString *identifier,NSTimeInterval timestamp,NSString *text){
+        [WPAdvisorContextStore.sharedStore appendIncomingForUsername:username identifier:identifier text:text date:[NSDate dateWithTimeIntervalSince1970:timestamp]];
+    };
+    coordinator.isBusy=^BOOL(NSString *username){for(WPAdvisorTask *task in WPAdvisorTaskCenter.sharedCenter.activeTasks)if([task.username isEqualToString:username])return YES;return NO;};
+    coordinator.onReady=^BOOL(NSString *username){
+        WPOverlayManager *self=weakSelf;if(!self || self.recoveryPaused || ![WPPreferences() boolForKey:@"enabled"] || !WPChatAdvisor.isReady)return NO;
+        NSArray<WPOverlayController *> *controllers=[self controllers];if(!controllers.count)return NO;
+        for(WPOverlayController *controller in controllers)if([WPChatPresentationActiveUsernameInWindow(controller.hostWindow) isEqualToString:username])[controller seedAdvisorContext];
+        NSArray *lines=[WPAdvisorContextStore.sharedStore snapshotForUsername:username];
+        if(!lines.count){
+            if(![self.advisorContextHints containsObject:username]){[self.advisorContextHints addObject:username];[self showMessage:@"请先打开已锁定的聊天，读取上下文后会继续分析。"];}
+            return NO;
+        }
+        [self.advisorContextHints removeObject:username];
+        WPAdvisorTask *task=[WPAdvisorTaskCenter.sharedCenter submitUsername:username displayName:[WPPartnerContact displayNameForUsername:username]?:@"联系人" lines:lines group:NO];
+        if(!task)return NO;
+        for(WPOverlayController *controller in controllers){[controller.advisorAutomaticTasks addObject:task.identifier];[controller advisorTasksChanged:nil];}
+        return YES;
+    };
 }
 - (BOOL)applicationIsAvailable {
     if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return NO;
@@ -981,6 +1152,7 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 - (void)stateChanged:(NSNotification *)notification {
     if([notification.object isKindOfClass:WPOverlayWindow.class])return;
     if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self stateChanged:notification];});return;}
+    [WPAdvisorContinuousCoordinator.sharedCoordinator refreshAccountIfNeeded];
     BOOL transient=[notification.name isEqual:UIApplicationWillResignActiveNotification] || [notification.name isEqual:UISceneWillDeactivateNotification];
     if(transient){
         if([notification.name isEqual:UISceneWillDeactivateNotification]){

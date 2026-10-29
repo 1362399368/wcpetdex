@@ -45,7 +45,7 @@ NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     [menu cancel];WPMenuSetActionEnabled(@"moments",NO);[menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];
     checks[@"menuAllDisabledSafe"]=@(!menu.isShowing && menu.hidden && WPMenuEnabledActions().count==0);
     [prefs setObject:@[@"moments",@"unknown",@"moments"] forKey:orderKey];
-    checks[@"menuInvalidOrderSanitized"]=@([WPMenuOrderedActions() isEqual:@[@"moments",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3"]]);
+    checks[@"menuInvalidOrderSanitized"]=@([WPMenuOrderedActions() isEqual:@[@"moments",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory"]]);
     WPMenuResetActions();
     [menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];buttons=[menu valueForKey:@"actionButtons"];
     id advisor=nil;for(id button in buttons)if([[button valueForKey:@"actionIdentifier"] isEqual:@"advisor"])advisor=button;
@@ -76,6 +76,11 @@ NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     BOOL allFit=menu.isShowing && buttons.count==8;
     for(UIView *button in buttons)allFit &= CGRectContainsRect(menu.bounds,button.frame);
     checks[@"menuEightActionsFit"]=@(allFit);[menu cancel];
+    WPMenuSetActionEnabled(@"advisorHistory",YES);
+    [menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];buttons=[menu valueForKey:@"actionButtons"];
+    BOOL nineFit=menu.isShowing && buttons.count==9;
+    for(UIView *button in buttons)nineFit &= CGRectContainsRect(menu.bounds,button.frame);
+    checks[@"menuNineActionsFit"]=@(nineFit);[menu cancel];
     for(NSUInteger index=0;index<contactKeys.count;index++){id value=oldContacts[index];if(value==NSNull.null)[prefs removeObjectForKey:contactKeys[index]];else[prefs setObject:value forKey:contactKeys[index]];}
     if(oldOrder)[prefs setObject:oldOrder forKey:orderKey];else[prefs removeObjectForKey:orderKey];
     if(oldEnabled)[prefs setObject:oldEnabled forKey:enabledKey];else[prefs removeObjectForKey:enabledKey];

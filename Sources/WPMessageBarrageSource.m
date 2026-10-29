@@ -1,4 +1,5 @@
 #import "WPMessageBarrageSource.h"
+#import "WPAdvisorContinuousCoordinator.h"
 #import "WPChatPresentationState.h"
 #import "WPMessageBarrage.h"
 #import "WPBarragePreferences.h"
@@ -150,7 +151,7 @@ WPBarrageConversationEligibility WPMessageBarrageConversationEligibility(NSStrin
     return NSThread.isMainThread?[[WPMessageBarrageSource sharedSource] eligibilityForConversation:username]:WPBarrageConversationEligibilityUnknown;
 }
 BOOL WPMessageBarrageConversationAllowed(NSString *username){return WPMessageBarrageConversationEligibility(username)==WPBarrageConversationEligibilityAllowed;}
-static NSLock *WPBSHookLock;static NSMutableDictionary<NSString*,NSValue*> *WPBSOriginals;
+static NSLock *WPBSHookLock;static NSMutableDictionary<NSString*,NSValue*> *WPBSOriginals;static NSUInteger WPBSAdvisorPendingCaptures;
 static void WPBSAddMessage(id object,SEL selector,id username,id wrap) {
     [WPBSHookLock lock];IMP original=[WPBSOriginals[NSStringFromSelector(selector)] pointerValue];[WPBSHookLock unlock];
     // Each adapter calls its predecessor once. Nested native routes are deduped
@@ -202,6 +203,53 @@ static void WPBSAddMessageNotify(id object,SEL selector,id username,id wrap,BOOL
 }
 - (void)reject:(NSString*)reason {[self.stateLock lock];_rejections[reason]=@([_rejections[reason] unsignedIntegerValue]+1);[self.stateLock unlock];}
 - (void)noteNativeWrap:(id)wrap {
+    // This separate opt-in route never depends on barrage visibility, muted
+    // conversation filters or message bodies. Accept only fresh incoming
+    // wrappers with a native stable ID; the coordinator additionally matches
+    // the explicitly locked private username and deduplicates nested hooks.
+    WPAdvisorContinuousCoordinator *continuous=WPAdvisorContinuousCoordinator.sharedCoordinator;
+    if(continuous.acceptsNativeMessages){
+        NSString *accountToken=continuous.accountToken;
+        NSNumber *received=WPBSInteger(wrap,@"m_uiStatus"),*created=WPBSInteger(wrap,@"m_uiCreateTime");
+        NSNumber *kind=WPBSInteger(wrap,@"m_uiMessageType");
+        NSNumber *server=WPBSInteger(wrap,@"m_n64MesSvrID"),*local=WPBSInteger(wrap,@"m_uiMesLocalID");
+        NSString *username=WPBSIdentifierValue(wrap,@"m_nsFromUsr");
+        NSTimeInterval timestamp=created.doubleValue;
+        if(received.unsignedIntegerValue==3 && username.length && [continuous isFreshIncomingTimestamp:timestamp forUsername:username] && (server.unsignedLongLongValue || local.unsignedLongLongValue)){
+            NSString *identifier=server.unsignedLongLongValue?[NSString stringWithFormat:@"s%llu",server.unsignedLongLongValue]:[NSString stringWithFormat:@"l%llu:t%.0f",local.unsignedLongLongValue,timestamp];
+            [WPBSHookLock lock];BOOL reserved=WPBSAdvisorPendingCaptures<64;if(reserved)WPBSAdvisorPendingCaptures++;[WPBSHookLock unlock];
+            if(reserved)dispatch_async(dispatch_get_main_queue(),^{
+                @try{
+                    [continuous refreshAccountIfNeeded];
+                    if(!accountToken.length || ![accountToken isEqualToString:continuous.accountToken])return;
+                    __block NSString *capturedText=nil;
+                    [continuous withNativeCaptureForUsername:username perform:^{
+                        if(![continuous isFreshIncomingTimestamp:timestamp forUsername:username])return;
+                        // Recheck the retained wrapper before reading its body:
+                        // the private SDK may mutate or reuse wrappers after a callback.
+                        NSNumber *currentStatus=WPBSInteger(wrap,@"m_uiStatus"),*currentCreated=WPBSInteger(wrap,@"m_uiCreateTime"),*currentKind=WPBSInteger(wrap,@"m_uiMessageType");
+                        NSNumber *currentServer=WPBSInteger(wrap,@"m_n64MesSvrID"),*currentLocal=WPBSInteger(wrap,@"m_uiMesLocalID");
+                        NSString *currentUsername=WPBSIdentifierValue(wrap,@"m_nsFromUsr");
+                        BOOL sameID=server.unsignedLongLongValue?currentServer.unsignedLongLongValue==server.unsignedLongLongValue:currentLocal.unsignedLongLongValue==local.unsignedLongLongValue;
+                        if(currentStatus.unsignedIntegerValue!=3 || currentCreated.doubleValue!=timestamp || currentKind.unsignedIntegerValue!=kind.unsignedIntegerValue || ![currentUsername isEqualToString:username] || !sameID)return;
+                        NSString *text=nil;
+                        switch(kind.unsignedIntegerValue){
+                            case 1:{id body=WPSEReadObject(wrap,@[@"m_nsContent"]);if([body isKindOfClass:NSString.class] && [body length]){
+                                NSString *value=[body stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+                                if(value.length>300){NSRange sequence=[value rangeOfComposedCharacterSequenceAtIndex:299];NSUInteger end=NSMaxRange(sequence)<=300?NSMaxRange(sequence):sequence.location;text=[[value substringToIndex:end] stringByAppendingString:@"…"];}
+                                else text=value;
+                            }break;}
+                            case 3:text=@"[图片]";break;case 34:text=@"[语音]";break;case 43:case 62:text=@"[视频]";break;
+                            case 47:text=@"[表情]";break;case 48:text=@"[位置]";break;case 49:text=@"[文件/分享]";break;default:break;
+                        }
+                        if(text.length)capturedText=text;
+                    }];
+                    if(capturedText.length)[continuous noteIncomingUsername:username identifier:identifier createdAt:timestamp text:capturedText];
+                } @catch(__unused NSException *exception) {}
+                @finally{[WPBSHookLock lock];WPBSAdvisorPendingCaptures--;[WPBSHookLock unlock];}
+            });
+        }
+    }
     [self.stateLock lock];_nativeCallbacks++;_lastNativeCallbackAt=NSDate.date.timeIntervalSince1970;BOOL active=_active&&_foreground;[self.stateLock unlock];
     if(!active||![self enabledNow])return;
     NSNumber*status=WPBSInteger(wrap,@"m_uiStatus"),*created=WPBSInteger(wrap,@"m_uiCreateTime");NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -210,6 +258,9 @@ static void WPBSAddMessageNotify(id object,SEL selector,id username,id wrap,BOOL
 }
 - (void)installHook {
     NSAssert(NSThread.isMainThread,@"Install the receive adapter on main");
+    // Ensure the coordinator (which reads UIApplication state) is created
+    // on the main thread before any background native callback can reach it.
+    (void)WPAdvisorContinuousCoordinator.sharedCoordinator;
     if(self.hooked)return;
     static dispatch_once_t once;dispatch_once(&once,^{WPBSHookLock=[NSLock new];WPBSOriginals=[NSMutableDictionary new];});
     Class cls=NSClassFromString(@"CMessageMgr");NSUInteger installed=0;
@@ -225,6 +276,10 @@ static void WPBSAddMessageNotify(id object,SEL selector,id username,id wrap,BOOL
         IMP implementation=method_getImplementation(method);if(implementation!=hook){[WPBSHookLock lock];WPBSOriginals[name]=[NSValue valueWithPointer:implementation];[WPBSHookLock unlock];if(!class_addMethod(cls,selector,hook,method_getTypeEncoding(method)))class_replaceMethod(cls,selector,hook,method_getTypeEncoding(method));}installed++;
     }
     self.hooked=installed>0;self.hookState=installed?[NSString stringWithFormat:@"installed-%lu",(unsigned long)installed]:@"unavailable";[self publishHealth];
+}
+- (void)ensureContinuousReceiveHook {
+    if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self ensureContinuousReceiveHook];});return;}
+    [self installHook];
 }
 - (void)setActive:(BOOL)active {
     if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self setActive:active];});return;}

@@ -39,6 +39,11 @@ FOUNDATION_EXPORT NSString * const WPChatAdvisorCustomPresetIdentifier;
 + (nullable instancetype)adviceFromModelContent:(NSString *)content error:(NSString * _Nullable * _Nullable)error;
 @end
 
+/// Cancels the active network request, including any retry. Use on the main thread.
+@interface WPChatAdvisorRequest : NSObject
+- (void)cancel;
+@end
+
 @interface WPChatAdvisor : NSObject
 + (BOOL)isEnabled;
 + (void)setEnabled:(BOOL)enabled;
@@ -71,6 +76,8 @@ FOUNDATION_EXPORT NSString * const WPChatAdvisorCustomPresetIdentifier;
 /// Completion runs on main. Exactly one of advice and error is non-nil.
 + (void)analyzeLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group
           completion:(void (^)(WPChatAdvice * _Nullable advice, NSString * _Nullable error))completion;
++ (WPChatAdvisorRequest *)startAnalysisOfLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group
+                                   completion:(void (^)(WPChatAdvice * _Nullable advice, NSString * _Nullable error))completion;
 + (void)testConnection:(void (^)(BOOL success, NSString *message))completion;
 + (void)fetchModels:(void (^)(NSArray<NSString *> * _Nullable models, NSString * _Nullable error))completion;
 /// Replaces the native input text without sending. NO means nothing was written.

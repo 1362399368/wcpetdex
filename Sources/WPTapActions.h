@@ -12,7 +12,7 @@ typedef NS_ENUM(NSInteger, WPTapAction) {
 FOUNDATION_EXPORT WPTapAction WPConfiguredTapAction(BOOL doubleTap);
 FOUNDATION_EXPORT void WPSetConfiguredTapAction(BOOL doubleTap, WPTapAction action);
 FOUNDATION_EXPORT void WPResetQuickChatTapActions(void);
-/// Gesture action identifiers: none, menu (long press only), quickChat, settings, moments, advisor.
+/// Gesture action identifiers: none, menu (long press only), quickChat, settings, moments, advisor, advisorHistory.
 FOUNDATION_EXPORT NSString *WPConfiguredGestureAction(BOOL longPress);
 FOUNDATION_EXPORT void WPSetConfiguredGestureAction(BOOL longPress, NSString *action);
 

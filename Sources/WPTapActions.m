@@ -53,10 +53,10 @@ void WPResetQuickChatTapActions(void) {
 
 NSString *WPConfiguredGestureAction(BOOL longPress) {
     NSString *value = [WPPreferences() stringForKey:longPress ? @"longPressAction" : @"shakeAction"];
-    NSArray *allowed = longPress ? @[@"none", @"menu", @"quickChat", @"settings", @"moments", @"advisor"] : @[@"none", @"quickChat", @"settings", @"moments", @"advisor"];
+    NSArray *allowed = longPress ? @[@"none", @"menu", @"quickChat", @"settings", @"moments", @"advisor", @"advisorHistory"] : @[@"none", @"quickChat", @"settings", @"moments", @"advisor", @"advisorHistory"];
     return [allowed containsObject:value] ? value : (longPress ? @"menu" : @"quickChat");
 }
 void WPSetConfiguredGestureAction(BOOL longPress, NSString *action) {
-    NSArray *allowed = longPress ? @[@"none", @"menu", @"quickChat", @"settings", @"moments", @"advisor"] : @[@"none", @"quickChat", @"settings", @"moments", @"advisor"];
+    NSArray *allowed = longPress ? @[@"none", @"menu", @"quickChat", @"settings", @"moments", @"advisor", @"advisorHistory"] : @[@"none", @"quickChat", @"settings", @"moments", @"advisor", @"advisorHistory"];
     if ([allowed containsObject:action]) [WPPreferences() setObject:action forKey:longPress ? @"longPressAction" : @"shakeAction"];
 }

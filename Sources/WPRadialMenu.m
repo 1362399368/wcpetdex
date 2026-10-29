@@ -27,7 +27,7 @@
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _actionIdentifier = [action copy];
-    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天", @"contact1":@"松手打开快捷联系人 1", @"contact2":@"松手打开快捷联系人 2", @"contact3":@"松手打开快捷联系人 3"}[action] ?: title;
+    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天", @"advisorHistory":@"松手打开参谋记录", @"contact1":@"松手打开快捷联系人 1", @"contact2":@"松手打开快捷联系人 2", @"contact3":@"松手打开快捷联系人 3"}[action] ?: title;
     self.accessibilityLabel = title;
     self.accessibilityHint = @{@"moments":@"进入朋友圈", @"quickChat":@"打开快捷聊天", @"settings":@"打开桌宠设置", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
@@ -107,6 +107,7 @@
         [[WPMenuActionButton alloc] initWithAction:@"settings" title:@"设置" symbol:@"gearshape.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"read" title:@"全部已读" symbol:@"checkmark.circle.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"advisor" title:@"参谋" symbol:@"sparkles"],
+        [[WPMenuActionButton alloc] initWithAction:@"advisorHistory" title:@"参谋记录" symbol:@"clock.arrow.circlepath"],
         [[WPMenuActionButton alloc] initWithAction:@"contact1" title:@"快捷联系人 1" symbol:@"person.circle"],
         [[WPMenuActionButton alloc] initWithAction:@"contact2" title:@"快捷联系人 2" symbol:@"person.circle"],
         [[WPMenuActionButton alloc] initWithAction:@"contact3" title:@"快捷联系人 3" symbol:@"person.circle"]
@@ -133,7 +134,7 @@ static CGFloat WPClamp(CGFloat value, CGFloat minimum, CGFloat maximum) {
     return fmax(minimum, fmin(maximum, value));
 }
 
-#define WP_MENU_MAX_ITEMS 8
+#define WP_MENU_MAX_ITEMS 9
 typedef struct {
     CGPoint centers[WP_MENU_MAX_ITEMS];
     NSUInteger count;
