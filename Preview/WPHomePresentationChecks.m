@@ -26,6 +26,14 @@ static UIControl *WPHomeControlWithLabel(UIView *view,NSString *label) {
     for(UIView *child in view.subviews){UIControl *found=WPHomeControlWithLabel(child,label);if(found)return found;}
     return nil;
 }
+static UIScrollView *WPHomeScrollView(UIView *view) {
+    if([view isKindOfClass:UIScrollView.class])return (UIScrollView *)view;
+    for(UIView *child in view.subviews){UIScrollView *found=WPHomeScrollView(child);if(found)return found;}return nil;
+}
+static void WPHomeScrollToView(UIView *home,UIView *target) {
+    UIScrollView *scroll=WPHomeScrollView(home);
+    if(scroll && target){[scroll scrollRectToVisible:[target convertRect:target.bounds toView:scroll] animated:NO];[home layoutIfNeeded];}
+}
 static NSDictionary<NSString *,NSNumber *> *WPHomeVisibilityChecks(void) {
     __block NSInteger change=-1;
     UIView *header=WPBuildHomeHeaderWithVisibility(NO,^(BOOL hidden){change=hidden?1:0;});
@@ -59,11 +67,20 @@ static NSDictionary<NSString *,NSNumber *> *WPHomeNavigationChecks(void) {
     [window layoutIfNeeded];[navigation.view layoutIfNeeded];[home.view layoutIfNeeded];
     NSArray *entries=@[@[@"快捷设置",@"WPQuickActionsController"],@[@"桌宠设置",@"WPPetSettingsController"],
                        @[@"聊天弹幕",@"WPBarrageSettingsController"],@[@"聊天参谋",@"WPChatAdvisorSettingsController"]];
+    UIControl *first=WPHomeControlWithLabel(home.view,@"快捷设置"),*second=WPHomeControlWithLabel(home.view,@"桌宠设置");
+    UIControl *third=WPHomeControlWithLabel(home.view,@"聊天弹幕"),*fourth=WPHomeControlWithLabel(home.view,@"聊天参谋");
+    CGRect a=[first convertRect:first.bounds toView:home.view],b=[second convertRect:second.bounds toView:home.view];
+    CGRect c=[third convertRect:third.bounds toView:home.view],d=[fourth convertRect:fourth.bounds toView:home.view];
+    UIView *featureCircle=WPHomeFind(first,@"WPHomeFeatureCircle");
+    BOOL twoColumns=first && second && third && fourth && fabs(CGRectGetMinY(a)-CGRectGetMinY(b))<1 &&
+        fabs(CGRectGetMinY(c)-CGRectGetMinY(d))<1 && CGRectGetMinY(c)>CGRectGetMaxY(a) && CGRectGetMinX(b)>CGRectGetMaxX(a);
+    BOOL largeCircle=CGRectGetWidth(featureCircle.bounds)>=80 && CGColorGetAlpha(featureCircle.backgroundColor.CGColor)<1;
     BOOL hitPoints=YES,navigationWorks=YES,repeated=YES;
     for(NSArray *entry in entries){
         for(NSUInteger pass=0;pass<2;pass++){
             [navigation setViewControllers:@[home] animated:NO];[home.view layoutIfNeeded];
             UIControl *control=WPHomeControlWithLabel(home.view,entry[0]);
+            WPHomeScrollToView(home.view,control);
             UIView *circle=nil,*label=nil;
             for(UIView *child in control.subviews){if([child isKindOfClass:UILabel.class])label=child;else circle=child;}
             [control layoutIfNeeded];
@@ -82,15 +99,38 @@ static NSDictionary<NSString *,NSNumber *> *WPHomeNavigationChecks(void) {
         }
     }
     [navigation setViewControllers:@[home] animated:NO];[home.view layoutIfNeeded];
-    UIView *intro=WPHomeFind(home.view,@"WPPluginIntroduction");UIButton *introButton=nil;
-    for(UIView *view in intro.subviews)if([view isKindOfClass:UIButton.class]){introButton=(id)view;break;}
-    CGPoint center=[introButton convertPoint:CGPointMake(CGRectGetMidX(introButton.bounds),CGRectGetMidY(introButton.bounds)) toView:navigation.view];
-    BOOL introHit=introButton && [navigation.view hitTest:center withEvent:nil]==introButton;
-    if(introHit)[UIView performWithoutAnimation:^{[introButton sendActionsForControlEvents:UIControlEventTouchUpInside];}];
+    UIControl *intro=(id)WPHomeFind(home.view,@"WPPluginIntroduction");WPHomeScrollToView(home.view,intro);
+    UIView *introCircle=WPHomeFind(intro,@"WPHomeFeatureCircle");
+    CGPoint center=[intro convertPoint:CGPointMake(CGRectGetMidX(introCircle.frame),CGRectGetMidY(introCircle.frame)) toView:navigation.view];
+    BOOL introHit=intro && introCircle && [navigation.view hitTest:center withEvent:nil]==intro;
+    if(introHit)[UIView performWithoutAnimation:^{[intro sendActionsForControlEvents:UIControlEventTouchUpInside];}];
     BOOL introWorks=introHit && [NSStringFromClass(navigation.topViewController.class) isEqualToString:@"WPPluginIntroductionController"];
     window.hidden=YES;window.rootViewController=nil;
     return @{@"homeIconsAndLabelsReceiveTaps":@(hitPoints),@"homeAllFeaturesOpen":@(navigationWorks),
-             @"homeFeaturesReopenAfterBack":@(repeated),@"homeIntroductionOpens":@(introWorks)};
+             @"homeFeaturesReopenAfterBack":@(repeated),@"homeIntroductionOpens":@(introWorks),
+             @"homeTwoColumnGrid":@(twoColumns),@"homeFeatureCirclesLargeAndTranslucent":@(largeCircle)};
+}
+static NSDictionary<NSString *,NSNumber *> *WPHomeSmallScreenChecks(void) {
+    UIWindow *window=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,320,568)];
+    UIViewController *home=[NSClassFromString(@"WPSettingsController") new];
+    UINavigationController *navigation=[[WPHomeTestNavigationController alloc] initWithRootViewController:home];
+    window.rootViewController=navigation;window.hidden=NO;
+    [window layoutIfNeeded];[navigation.view layoutIfNeeded];[home.view layoutIfNeeded];
+    BOOL contained=YES,hittable=YES;NSMutableDictionary *detail=[NSMutableDictionary new];
+    for(NSString *name in @[@"快捷设置",@"桌宠设置",@"聊天弹幕",@"聊天参谋",@"插件介绍"]){
+        UIControl *control=WPHomeControlWithLabel(home.view,name);WPHomeScrollToView(home.view,control);
+        if([name isEqualToString:@"插件介绍"]){UIScrollView *scroll=WPHomeScrollView(home.view);
+            CGFloat bottom=MAX(-scroll.adjustedContentInset.top,scroll.contentSize.height-scroll.bounds.size.height+scroll.adjustedContentInset.bottom);
+            [scroll setContentOffset:CGPointMake(scroll.contentOffset.x,bottom) animated:NO];[home.view layoutIfNeeded];}
+        UIView *circle=WPHomeFind(control,@"WPHomeFeatureCircle");
+        CGRect icon=[circle convertRect:circle.bounds toView:control];
+        contained &= control && circle && CGRectContainsRect(control.bounds,icon);
+        CGPoint center=[circle convertPoint:CGPointMake(CGRectGetMidX(circle.bounds),CGRectGetMidY(circle.bounds)) toView:navigation.view];
+        BOOL hit=circle && [navigation.view hitTest:center withEvent:nil]==control;
+        detail[[@"homeSmallScreenHit-" stringByAppendingString:name]]=@(hit);hittable &=hit;
+    }
+    window.hidden=YES;window.rootViewController=nil;
+    detail[@"homeSmallScreenIconsContained"]=@(contained);detail[@"homeSmallScreenEntriesHittable"]=@(hittable);return detail;
 }
 NSDictionary<NSString *,NSNumber *> *WPHomePresentationChecks(void) {
     NSCAssert(NSThread.isMainThread,@"Run on main thread");
@@ -131,5 +171,6 @@ NSDictionary<NSString *,NSNumber *> *WPHomePresentationChecks(void) {
              @"homeDisplaysZhourBrand":@(title),@"homeAvatarIsCircular":@(circular),
              @"homeGridEntryInvokesAction":@(entry),@"homeUnavailableAccountUsesPlaceholder":@(placeholder)} mutableCopy];
     [results addEntriesFromDictionary:WPHomeNavigationChecks()];
+    [results addEntriesFromDictionary:WPHomeSmallScreenChecks()];
     [results addEntriesFromDictionary:WPHomeVisibilityChecks()];return results;
 }

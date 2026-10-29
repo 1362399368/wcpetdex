@@ -126,16 +126,17 @@ UIView *WPBuildHomeHeaderWithVisibility(BOOL hidden,void (^handler)(BOOL)){
 }
 UIControl *WPBuildHomeFeature(NSString *title,UIImage *image,UIColor *tint,dispatch_block_t handler){
     UIControl *control=[UIControl new];control.isAccessibilityElement=YES;control.accessibilityLabel=title;control.accessibilityTraits=UIAccessibilityTraitButton;
-    UIView *circle=[UIView new];circle.userInteractionEnabled=NO;circle.backgroundColor=[tint colorWithAlphaComponent:.15];circle.layer.cornerRadius=30;
+    UIView *circle=[UIView new];circle.userInteractionEnabled=NO;circle.backgroundColor=[tint colorWithAlphaComponent:.15];circle.layer.cornerRadius=44;
+    circle.accessibilityIdentifier=@"WPHomeFeatureCircle";
     circle.layer.borderColor=[tint colorWithAlphaComponent:.18].CGColor;circle.layer.borderWidth=.7;circle.translatesAutoresizingMaskIntoConstraints=NO;
     UIImageView *icon=[[UIImageView alloc] initWithImage:image];icon.userInteractionEnabled=NO;icon.tintColor=tint;icon.contentMode=UIViewContentModeScaleAspectFit;icon.translatesAutoresizingMaskIntoConstraints=NO;
     [circle addSubview:icon];[control addSubview:circle];
-    UILabel *label=WPThemeLabel(title,13,UIFontWeightSemibold,WPThemePrimaryText());label.userInteractionEnabled=NO;label.textAlignment=NSTextAlignmentCenter;
+    UILabel *label=WPThemeLabel(title,15,UIFontWeightSemibold,WPThemePrimaryText());label.userInteractionEnabled=NO;label.textAlignment=NSTextAlignmentCenter;
     label.numberOfLines=2;label.lineBreakMode=NSLineBreakByTruncatingTail;label.translatesAutoresizingMaskIntoConstraints=NO;[control addSubview:label];
-    [NSLayoutConstraint activateConstraints:@[[control.heightAnchor constraintGreaterThanOrEqualToConstant:104],
-        [circle.widthAnchor constraintEqualToConstant:60],[circle.heightAnchor constraintEqualToConstant:60],
+    [NSLayoutConstraint activateConstraints:@[[control.heightAnchor constraintGreaterThanOrEqualToConstant:130],
+        [circle.widthAnchor constraintEqualToConstant:88],[circle.heightAnchor constraintEqualToConstant:88],
         [circle.topAnchor constraintEqualToAnchor:control.topAnchor constant:8],[circle.centerXAnchor constraintEqualToAnchor:control.centerXAnchor],
-        [icon.widthAnchor constraintEqualToConstant:29],[icon.heightAnchor constraintEqualToConstant:29],
+        [icon.widthAnchor constraintEqualToConstant:40],[icon.heightAnchor constraintEqualToConstant:40],
         [icon.centerXAnchor constraintEqualToAnchor:circle.centerXAnchor],[icon.centerYAnchor constraintEqualToAnchor:circle.centerYAnchor],
         [label.topAnchor constraintEqualToAnchor:circle.bottomAnchor constant:9],[label.leadingAnchor constraintEqualToAnchor:control.leadingAnchor],
         [label.trailingAnchor constraintEqualToAnchor:control.trailingAnchor],[label.bottomAnchor constraintLessThanOrEqualToAnchor:control.bottomAnchor constant:-5]]];

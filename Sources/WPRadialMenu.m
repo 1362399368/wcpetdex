@@ -40,6 +40,7 @@
     UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:23 weight:UIImageSymbolWeightSemibold];
     _symbolView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbol withConfiguration:configuration]];
     if([action isEqualToString:@"moments"])_symbolView.image=WPMomentsMenuIcon();
+    if([action isEqualToString:@"advisor"])_symbolView.image=WPAdvisorMenuIcon();
     _symbolView.tintColor = UIColor.labelColor;
     _symbolView.contentMode = UIViewContentModeScaleAspectFit;
     _symbolView.userInteractionEnabled = NO;

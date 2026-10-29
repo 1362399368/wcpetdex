@@ -42,7 +42,7 @@ def main():
     parser.add_argument('--dylib', type=Path, required=True, help='already built signed standalone dylib')
     parser.add_argument('--output', type=Path, required=True, help='output .deb path')
     parser.add_argument('--scheme', choices=('rootful', 'rootless'), required=True)
-    parser.add_argument('--version', default='1.4.1')
+    parser.add_argument('--version', default='1.4.2')
     args = parser.parse_args()
     if not args.dylib.is_file():
         parser.error('dylib file does not exist')

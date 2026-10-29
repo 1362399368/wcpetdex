@@ -5,6 +5,23 @@
 #import "WPSharedChatAvatar.h"
 extern void WPPreviewSeedSharedAvatar(NSString *, UIImage *);
 
+static BOOL WPAdvisorIconHasDistinctColors(UIImage *image){
+    if(!image.CGImage || image.renderingMode!=UIImageRenderingModeAlwaysOriginal)return NO;
+    unsigned char pixels[34*34*4]={0};
+    CGColorSpaceRef colors=CGColorSpaceCreateDeviceRGB();
+    CGContextRef context=CGBitmapContextCreate(pixels,34,34,8,34*4,colors,kCGImageAlphaPremultipliedLast|kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(colors);if(!context)return NO;
+    CGContextDrawImage(context,CGRectMake(0,0,34,34),image.CGImage);CGContextRelease(context);
+    BOOL purple=NO,teal=NO,orange=NO;
+    for(NSUInteger i=0;i<34*34;i++){
+        unsigned char *p=&pixels[i*4];if(p[3]<225)continue;
+        purple|=p[2]>p[0]+25 && p[0]>p[1]+15;
+        teal|=p[1]>p[0]+50 && p[2]>p[0]+50;
+        orange|=p[0]>p[1]+50 && p[1]>p[2]+35;
+    }
+    return purple && teal && orange;
+}
+
 NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     NSCAssert(NSThread.isMainThread,@"Menu checks require main thread");
     NSUserDefaults *prefs=WPPreferences();NSString *orderKey=@"radialMenuOrder",*enabledKey=@"radialMenuEnabled";
@@ -30,6 +47,16 @@ NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     [prefs setObject:@[@"moments",@"unknown",@"moments"] forKey:orderKey];
     checks[@"menuInvalidOrderSanitized"]=@([WPMenuOrderedActions() isEqual:@[@"moments",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3"]]);
     WPMenuResetActions();
+    [menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];buttons=[menu valueForKey:@"actionButtons"];
+    id advisor=nil;for(id button in buttons)if([[button valueForKey:@"actionIdentifier"] isEqual:@"advisor"])advisor=button;
+    UIImageView *advisorIcon=[advisor valueForKey:@"symbolView"];
+    checks[@"menuAdvisorIconHasThreeColors"]=@(WPAdvisorIconHasDistinctColors(advisorIcon.image));
+    __block NSString *chosen=nil;menu.actionHandler=^(NSString *action){chosen=action;};
+    [menu updateFingerAtPoint:((UIView *)advisor).center];
+    BOOL selected=(((UIView *)advisor).accessibilityTraits & UIAccessibilityTraitSelected)!=0 && advisorIcon.transform.a>1;
+    [menu finishTracking];
+    checks[@"menuAdvisorSelectionAndAction"]=@(selected && [chosen isEqual:@"advisor"] && !menu.isShowing);
+    menu.actionHandler=nil;
     WPMenuSetContactUsername(@"contact1",@"test-contact-one");WPMenuSetContactUsername(@"contact2",@"test-contact-two");WPMenuSetContactUsername(@"contact3",@"test-contact-three");
     WPMenuSetActionEnabled(@"contact1",YES);WPMenuSetActionEnabled(@"contact2",YES);WPMenuSetActionEnabled(@"contact3",YES);
     WPMenuSetOrder(@[@"contact2",@"read",@"contact1",@"advisor",@"moments",@"contact3"]);

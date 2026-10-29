@@ -326,6 +326,9 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 @implementation WPSettingsController
 - (void)viewDidLoad{
     self.title=@"Zhour";[super viewDidLoad];
+    // Keep the introduction at the bottom when the page is taller than its
+    // content; on a short screen the content remains naturally scrollable.
+    [self.stack.heightAnchor constraintGreaterThanOrEqualToAnchor:self.scrollView.frameLayoutGuide.heightAnchor constant:-36].active=YES;
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc] initWithTitle:@"完成" style:UIBarButtonItemStyleDone target:self action:@selector(done)];
     for(NSString *name in @[WPSettingsDidChangeNotification])
         [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(reloadCards) name:name object:nil];
@@ -349,7 +352,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         @[@"桌宠设置",@"外观、切换桌宠与位置",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
         @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}],
         @[@"聊天参谋",WPChatAdvisor.isReady?@"意图分析 · 建议回复":@"接入硅基流动后使用",[UIImage systemImageNamed:@"sparkles"],UIColor.systemPurpleColor,^{[weakSelf push:[WPChatAdvisorSettingsController new]];}]];
-    NSUInteger columns=self.view.bounds.size.width>0 && self.view.bounds.size.width<280?2:self.view.bounds.size.width<340?3:4;
+    NSUInteger columns=2;
     for(NSUInteger start=0;start<features.count;start+=columns){
         UIStackView *line=[UIStackView new];line.axis=UILayoutConstraintAxisHorizontal;line.spacing=12;line.distribution=UIStackViewDistributionFillEqually;line.alignment=UIStackViewAlignmentFill;
         for(NSUInteger i=start;i<MIN(features.count,start+columns);i++){
@@ -361,10 +364,18 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
     }
     UIStackView *about=[self addCard];
-    UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"了解桌宠功能" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
-    intro.accessibilityIdentifier=@"WPPluginIntroduction";[about addArrangedSubview:intro];
     UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"交流和问题反馈" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
     group.accessibilityIdentifier=@"WPHomeTelegramGroup";[about addArrangedSubview:group];
+    UIView *spacer=[UIView new];[spacer.heightAnchor constraintGreaterThanOrEqualToConstant:0].active=YES;
+    NSLayoutConstraint *preferredZero=[spacer.heightAnchor constraintEqualToConstant:0];preferredZero.priority=UILayoutPriorityDefaultLow;preferredZero.active=YES;
+    [self.stack addArrangedSubview:spacer];
+    UIControl *intro=WPBuildHomeFeature(@"插件介绍",[UIImage systemImageNamed:@"info.circle.fill"],UIColor.systemBlueColor,^{[weakSelf push:[WPPluginIntroductionController new]];});
+    intro.accessibilityIdentifier=@"WPPluginIntroduction";
+    UIView *introRow=[UIView new];intro.translatesAutoresizingMaskIntoConstraints=NO;[introRow addSubview:intro];
+    [NSLayoutConstraint activateConstraints:@[[intro.centerXAnchor constraintEqualToAnchor:introRow.centerXAnchor],
+        [intro.topAnchor constraintEqualToAnchor:introRow.topAnchor],[intro.bottomAnchor constraintEqualToAnchor:introRow.bottomAnchor],
+        [intro.widthAnchor constraintEqualToConstant:150],[intro.widthAnchor constraintLessThanOrEqualToAnchor:introRow.widthAnchor]]];
+    [self.stack addArrangedSubview:introRow];
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}
 
