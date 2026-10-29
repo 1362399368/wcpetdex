@@ -28,7 +28,7 @@ static BOOL sCollectorRegistrationInProgress;
 @implementation WPZhouyouPluginSettingsController
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title=@"zhour-single";
+    self.title=@"Zhour";
     WPSettingsController *settings=[WPSettingsController new];
     __weak typeof(self) weakSelf=self;
     settings.onClose=^{ [weakSelf closeSettings]; };
@@ -102,7 +102,7 @@ static BOOL WPRegisterCollectorClass(Class collectorClass) {
         sCollectorRegistrationInProgress=YES;
         @try {
             ((void(*)(id,SEL,id,id,id))objc_msgSend)(manager,registration,
-                @"zhour-single",WPPluginVersion(),WPCollectorControllerName());
+                @"Zhour",WPPluginVersion(),WPCollectorControllerName());
         } @finally {sCollectorRegistrationInProgress=NO;}
         // A void registration returning normally is the published success
         // contract. Class presence or a singleton alone never hides our row.
@@ -222,7 +222,7 @@ static id WPNewCell(Class cellClass, id controller) {
     if (WPMethodMatches(method, 5, '@') && WPArgumentMatches(method, 2, ":") &&
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@")) {
         return ((id (*)(id, SEL, SEL, id, id))objc_msgSend)(cellClass, selector,
-            action, controller, @"zhour-single");
+            action, controller, @"Zhour");
     }
     selector = @selector(normalCellForSel:target:title:accessoryType:);
     method = class_getClassMethod(cellClass, selector);
@@ -230,7 +230,7 @@ static id WPNewCell(Class cellClass, id controller) {
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@") &&
         WPArgumentMatches(method, 5, "qiQI")) {
         return ((id (*)(id, SEL, SEL, id, id, NSInteger))objc_msgSend)(cellClass, selector,
-            action, controller, @"zhour-single", UITableViewCellAccessoryDisclosureIndicator);
+            action, controller, @"Zhour", UITableViewCellAccessoryDisclosureIndicator);
     }
     return nil;
 }
@@ -252,14 +252,35 @@ static id WPNewSection(Class sectionClass, id cell) {
     return section;
 }
 
+// Remove only the section created by this plugin when a collector becomes available.
+static void WPRemoveNativeSettingsSection(id manager,id section) {
+    if(!manager || !section)return;
+    SEL remove=@selector(removeSection:);Method method=class_getInstanceMethod(object_getClass(manager),remove);
+    @try {
+        if(WPMethodMatches(method,3,'v') && WPArgumentMatches(method,2,"@"))
+            ((void(*)(id,SEL,id))objc_msgSend)(manager,remove,section);
+        else for(Class cls=object_getClass(manager);cls;cls=class_getSuperclass(cls)){
+            unsigned int count=0;Ivar *ivars=class_copyIvarList(cls,&count);
+            for(unsigned int i=0;i<count;i++){
+                const char *name=ivar_getName(ivars[i]),*type=ivar_getTypeEncoding(ivars[i]);
+                if(!name || !strstr(name,"ection") || !type || type[0]!='@')continue;
+                id value=object_getIvar(manager,ivars[i]);
+                if([value isKindOfClass:NSMutableArray.class])[(NSMutableArray *)value removeObjectIdenticalTo:section];
+            }
+            free(ivars);
+        }
+    } @catch(__unused NSException *exception) { return; }
+    if(WPSectionInModel(manager,section)==WPSectionPresenceAbsent)
+        objc_setAssociatedObject(manager,kWPSettingsSectionKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static void WPInsertNativeSettingsRow(id controller) {
     if (![NSThread isMainThread]) return;
-    // Keep the native Settings entry available even after registration: the
-    // user can open this plugin from either location independently.
-    WPRegisterPluginCollector();
+    BOOL registered=WPRegisterPluginCollector();
     id manager = WPTableManager(controller);
     if (!manager) return;
     id previous = objc_getAssociatedObject(manager, kWPSettingsSectionKey);
+    if(registered){WPRemoveNativeSettingsSection(manager,previous);return;}
     // Unknown layout means we keep the existing row rather than risk duplicates.
     if (previous && WPSectionInModel(manager, previous) != WPSectionPresenceAbsent) return;
 

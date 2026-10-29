@@ -6,7 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// arguments must be expressed in this view's local coordinates.
 @interface WPRadialMenuView : UIView
 
-/// Action identifiers: moments, miss, anger, read, advisor. Called on main.
+/// Action identifiers: read, advisor, moments, quickChat, settings, contact1–3. Called on main.
 @property (nonatomic, copy, nullable) void (^actionHandler)(NSString *action);
 @property (nonatomic, readonly, getter=isShowing) BOOL showing;
 @property (nonatomic, readonly) BOOL hasSelection;

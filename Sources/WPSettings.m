@@ -20,14 +20,9 @@
 #import "WPQuickChatPreferences.h"
 #import "WPChatAdvisor.h"
 #import "WPChatAdvisorSettingsController.h"
+#import "WPHomePresentation.h"
+#import "WPMenuConfiguration.h"
 
-/// Closes the plugin panel first so the action happens in WeChat below it.
-static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *name,id object){
-    UIViewController *root=controller.navigationController.viewControllers.firstObject;
-    void (^close)(void)=[root respondsToSelector:@selector(onClose)]?[(WPSettingsController *)root onClose]:nil;
-    if(close)close();
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,450*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[NSNotificationCenter.defaultCenter postNotificationName:name object:object];});
-}
 #pragma mark - Secondary pages
 
 @interface WPPluginIntroductionController : WPCardPageController
@@ -36,7 +31,7 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
 - (void)viewDidLoad{self.title=@"插件介绍";[super viewDidLoad];}
 - (void)buildCards{
     UIStackView *intro=[self addCard];
-    [intro addArrangedSubview:WPThemeLabel(@"zhour-single",20,UIFontWeightSemibold,WPThemePrimaryText())];
+    [intro addArrangedSubview:WPThemeLabel(@"Zhour",20,UIFontWeightSemibold,WPThemePrimaryText())];
     [intro addArrangedSubview:WPThemeLabel(@"一只陪你聊天的微信桌宠。默认形象是噜噜，可在桌宠库选择或导入喜欢的形象。",14,UIFontWeightRegular,WPThemeSecondaryText())];
     [self addSectionTitle:@"主要功能"];
     UIStackView *features=[self addCard];
@@ -155,15 +150,8 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
 }
 - (void)buildCards{
     __weak typeof(self) weakSelf=self;
-    [self addSectionTitle:@"快捷操作"];
-    UIStackView *card=[self addCard];
-    [card addArrangedSubview:[self rowWithTitle:@"一键已读" detail:[WPActionAdapter supportsMarkAllRead]?@"已接入当前微信版本":@"当前微信版本未适配" actionTitle:@"执行" handler:^{
-        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"read");}]];
-    [card addArrangedSubview:[self rowWithTitle:@"一键跳转朋友圈" detail:nil actionTitle:@"打开" handler:^{
-        WPPerformAfterClosingPanel(weakSelf,@"WeChatPet.PerformAction",@"moments");}]];
-    [self addNote:@"也可以长按桌宠，滑到对应图标后松手。"];
     void (^changed)(void)=^{[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];};
-    [self addSectionTitle:@"桌宠点击动作"];
+    [self addSectionTitle:@"桌宠手势"];
     UIStackView *tapActions=[self addCard];
     for(NSNumber *gesture in @[@NO,@YES]){
         BOOL doubleTap=gesture.boolValue;
@@ -177,13 +165,12 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
         }]];
     }
     [tapActions addArrangedSubview:[self switchRowWithTitle:@"贴边时直接执行点击动作" detail:@"单击和双击直接执行上方设置；关闭时先展开桌宠" on:WPQuickChatOptionBool(@"edgeTapActions") handler:^(BOOL on){WPQuickChatSetOption(@"edgeTapActions",@(on));}]];
-    [self addNote:@"单击和双击可分别选择动作；选择聊天浮窗时会自动开启便捷聊天；聊天参谋需要先打开一个聊天。"];
-    [self addSectionTitle:@"长按、拖动与摇晃"];
-    UIStackView *gesture=[self addCard];
+    UIStackView *gesture=tapActions;
     [gesture addArrangedSubview:[self sliderRowWithTitle:@"长按菜单圆弧" value:[WPPreferences() doubleForKey:@"menuScale"] minimum:.6 maximum:4 format:^NSString *(float v){return [NSString stringWithFormat:@"%.0f 点",v*80];} handler:^(float v){
         [WPPreferences() setDouble:v forKey:@"menuScale"];changed();[[WPOverlayManager sharedManager] previewMenuRadius];}]];
     [self addNote:@"圆弧半径 48–320 点，拖动即时预览；屏幕放不下时会自动收小。"];
     UIView *longPress=[self gestureActionRow:YES]; longPress.accessibilityIdentifier=@"WPLongPressAction"; [gesture addArrangedSubview:longPress];
+    [gesture addArrangedSubview:[self rowWithTitle:@"长按菜单项目" detail:@"选择显示内容并拖动排序" actionTitle:@"设置" handler:^{[weakSelf.navigationController pushViewController:[WPMenuSettingsController new] animated:YES];}]];
     UIView *shakeAction=[self gestureActionRow:NO]; shakeAction.accessibilityIdentifier=@"WPShakeAction"; [gesture addArrangedSubview:shakeAction];
     NSInteger level=WPShakeSensitivityFromPreferenceValue([WPPreferences() objectForKey:@"shakeSensitivity"]);
     [gesture addArrangedSubview:[self segmentedRowWithTitle:@"摇晃灵敏度" items:@[@"低",@"中",@"高"] selected:level handler:^(NSInteger index){[WPPreferences() setInteger:index forKey:@"shakeSensitivity"];}]];
@@ -196,7 +183,6 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
     [edge addArrangedSubview:[self switchRowWithTitle:@"有未读时也允许收起" detail:@"贴边收起后仍显示未读头像，可直接点击进入聊天" on:WPAllowUnreadPeek() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"allowUnreadPeek"];changed();}]];
     [self addNote:@"横屏与竖屏分别记住最后一次拖动的位置；键盘避让不会覆盖保存的位置。锁定后仍可拖动手指摇晃桌宠，人物本身保持原位。"];
 
-    WPAddQuickChatGestureSettings(self);
     [self addSectionTitle:@"便捷聊天"];
     BOOL enabled=WPQuickChatEnabled();
     UIStackView *quick=[self addCard];
@@ -204,20 +190,18 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
         [WPPreferences() setBool:on forKey:@"quickChatEnabled"];changed();[weakSelf reloadCards];}];
     ((UIStackView *)enableQuick).arrangedSubviews.lastObject.accessibilityIdentifier=@"WPQuickChatEnableSwitch";
     [quick addArrangedSubview:enableQuick];
+    WPAddQuickChatGestureRows(self,quick);
     UIView *flash=[self switchRowWithTitle:@"新消息闪烁提醒" detail:@"新消息到达时桌宠探出、闪烁并显示发送方头像；免打扰的聊天不提醒" on:WPQuickChatFlashEnabled() handler:^(BOOL on){
         [WPPreferences() setBool:on forKey:@"quickChatFlash"];changed();}];
     flash.userInteractionEnabled=enabled;flash.alpha=enabled?1:.4;
     [quick addArrangedSubview:flash];
     [quick addArrangedSubview:[self rowWithTitle:@"快捷聊天设置" detail:@"侧栏外观、消息提示与会话过滤" actionTitle:@"设置" handler:^{[weakSelf.navigationController pushViewController:[WPQuickChatSettingsController new] animated:YES];}]];
-    [self addNote:@"开关即时生效，不用重启微信。关闭后保留点击与手势动作设置，重新开启即可继续使用。"];
-    [self addSectionTitle:@"提醒设置"];
-    UIStackView *reminders=[self addCard];
-    [reminders addArrangedSubview:[self rowWithTitle:@"提醒方式" detail:@"提醒强度、安静时段与指定联系人" actionTitle:nil handler:^{[weakSelf.navigationController pushViewController:[WPReminderSettingsController new] animated:YES];}]];
-    [self addSectionTitle:@"手势恢复"];
+    [quick addArrangedSubview:[self rowWithTitle:@"提醒方式" detail:@"提醒强度、安静时段与指定联系人" actionTitle:nil handler:^{[weakSelf.navigationController pushViewController:[WPReminderSettingsController new] animated:YES];}]];
+    [self addSectionTitle:@"恢复默认"];
     UIStackView *resetGestures=[self addCard];
-    [resetGestures addArrangedSubview:[self rowWithTitle:@"恢复手势参数" detail:@"仅恢复菜单圆弧、摇晃灵敏度和位置锁定；不改变动作选择" actionTitle:@"恢复" handler:^{
-        for(NSString *key in @[@"menuScale",@"shakeSensitivity",@"positionLocked"])[WPPreferences() removeObjectForKey:key];
-        changed();[weakSelf reloadCards];}]];
+    [resetGestures addArrangedSubview:[self rowWithTitle:@"恢复原来参数" detail:@"恢复本页手势及便捷聊天设置" actionTitle:@"恢复" handler:^{
+        for(NSString *key in @[@"menuScale",@"shakeSensitivity",@"positionLocked",@"singleTapAction",@"doubleTapAction",@"longPressAction",@"shakeAction",@"autoPeek",@"allowUnreadPeek",@"quickChatEnabled",@"quickChatFlash",@"quickChat.tapMode",@"quickChat.doubleTapMode",@"quickChat.holdMode",@"quickChat.edgeTapActions",@"quickChat.arrivalTap",@"quickChat.openMode"])[WPPreferences() removeObjectForKey:key];
+        WPMenuResetActions();changed();[weakSelf reloadCards];}]];
 }
 @end
 
@@ -328,32 +312,12 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
 
 #pragma mark - Home
 
-@interface WPFeatureCard : UIControl
-@end
-@implementation WPFeatureCard
-+ (instancetype)cardWithTitle:(NSString *)title subtitle:(NSString *)subtitle image:(UIImage *)image tint:(UIColor *)tint{
-    WPFeatureCard *card=[WPFeatureCard new];card.backgroundColor=WPThemeCard();card.layer.cornerRadius=WPThemeCardRadius;card.layer.cornerCurve=kCACornerCurveContinuous;
-    UIView *tile=WPThemeIconTile(image,tint,46);tile.userInteractionEnabled=NO;
-    UILabel *titleLabel=WPThemeLabel(title,16,UIFontWeightSemibold,WPThemePrimaryText());
-    UILabel *subtitleLabel=WPThemeLabel(subtitle,12,UIFontWeightRegular,WPThemeSecondaryText());
-    UIStackView *text=[[UIStackView alloc] initWithArrangedSubviews:@[titleLabel,subtitleLabel]];text.axis=UILayoutConstraintAxisVertical;text.spacing=3;
-    UIStackView *row=[[UIStackView alloc] initWithArrangedSubviews:@[tile,text]];row.axis=UILayoutConstraintAxisHorizontal;row.spacing=12;row.alignment=UIStackViewAlignmentCenter;
-    row.userInteractionEnabled=NO;row.translatesAutoresizingMaskIntoConstraints=NO;[card addSubview:row];
-    [NSLayoutConstraint activateConstraints:@[[row.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:14],[row.trailingAnchor constraintLessThanOrEqualToAnchor:card.trailingAnchor constant:-12],
-        [row.topAnchor constraintGreaterThanOrEqualToAnchor:card.topAnchor constant:14],[row.bottomAnchor constraintLessThanOrEqualToAnchor:card.bottomAnchor constant:-14],
-        [row.centerYAnchor constraintEqualToAnchor:card.centerYAnchor],[card.heightAnchor constraintGreaterThanOrEqualToConstant:84]]];
-    card.isAccessibilityElement=YES;card.accessibilityLabel=title;card.accessibilityHint=subtitle;card.accessibilityTraits=UIAccessibilityTraitButton;
-    return card;
-}
-- (void)setHighlighted:(BOOL)highlighted{[super setHighlighted:highlighted];self.backgroundColor=highlighted?WPThemeElevated():WPThemeCard();}
-@end
-
 @interface WPSettingsController ()
 @property(nonatomic) CGFloat builtWidth;
 @end
 @implementation WPSettingsController
 - (void)viewDidLoad{
-    self.title=@"zhour-single";[super viewDidLoad];
+    self.title=@"Zhour";[super viewDidLoad];
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc] initWithTitle:@"完成" style:UIBarButtonItemStyleDone target:self action:@selector(done)];
     for(NSString *name in @[WPSettingsDidChangeNotification])
         [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(reloadCards) name:name object:nil];
@@ -366,7 +330,7 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
 }
 - (void)done{[self.view endEditing:YES];if(self.navigationController.presentingViewController)[self dismissViewControllerAnimated:YES completion:self.onClose];else if(self.onClose)self.onClose();}
 - (void)buildCards{
-    [self.stack addArrangedSubview:[self infoCard]];
+    [self.stack addArrangedSubview:WPBuildHomeHeader()];
     UIStackView *visibility=[self addCard];
     UIView *hideRow=[self switchRowWithTitle:@"隐藏桌宠" detail:@"隐藏桌宠和浮动提示；可从微信设置再次进入这里，关闭开关恢复显示" on:![WPPreferences() boolForKey:@"enabled"] handler:^(BOOL hidden){
         [WPPreferences() setBool:!hidden forKey:@"enabled"];
@@ -380,13 +344,13 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
         @[@"桌宠设置",@"外观、切换桌宠与位置",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
         @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}],
         @[@"聊天参谋",WPChatAdvisor.isReady?@"意图分析 · 建议回复":@"接入硅基流动后使用",[UIImage systemImageNamed:@"sparkles"],UIColor.systemPurpleColor,^{[weakSelf push:[WPChatAdvisorSettingsController new]];}]];
-    NSUInteger columns=self.view.bounds.size.width>0 && self.view.bounds.size.width<340?1:2;
+    NSUInteger columns=self.view.bounds.size.width>0 && self.view.bounds.size.width<280?2:self.view.bounds.size.width<340?3:4;
     for(NSUInteger start=0;start<features.count;start+=columns){
         UIStackView *line=[UIStackView new];line.axis=UILayoutConstraintAxisHorizontal;line.spacing=12;line.distribution=UIStackViewDistributionFillEqually;line.alignment=UIStackViewAlignmentFill;
         for(NSUInteger i=start;i<MIN(features.count,start+columns);i++){
             NSArray *item=features[i];void (^handler)(void)=item[4];
-            WPFeatureCard *card=[WPFeatureCard cardWithTitle:item[0] subtitle:item[1] image:item[2] tint:item[3]];
-            [card addAction:[UIAction actionWithHandler:^(__unused UIAction *a){handler();}] forControlEvents:UIControlEventTouchUpInside];
+            UIControl *card=WPBuildHomeFeature(item[0],item[2],item[3],handler);
+            card.accessibilityHint=item[1];
             [line addArrangedSubview:card];
         }
         [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
@@ -394,17 +358,6 @@ static void WPPerformAfterClosingPanel(UIViewController *controller,NSString *na
     UIStackView *about=[self addCard];
     UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"了解桌宠功能" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
     intro.accessibilityIdentifier=@"WPPluginIntroduction";[about addArrangedSubview:intro];
-}
-- (UIView *)infoCard{
-    UIView *card=[UIView new]; card.backgroundColor=WPThemeCard(); card.layer.cornerRadius=WPThemeCardRadius; card.layer.cornerCurve=kCACornerCurveContinuous;
-    UIView *tile=WPThemeIconTile([UIImage systemImageNamed:@"pawprint.fill"],UIColor.systemOrangeColor,58);
-    UILabel *title=WPThemeLabel(@"zhour-single",17,UIFontWeightSemibold,WPThemePrimaryText());
-    UILabel *detail=WPThemeLabel(@"噜噜陪你轻松聊天",12,UIFontWeightRegular,WPThemeSecondaryText());
-    UIStackView *text=[[UIStackView alloc] initWithArrangedSubviews:@[title,detail]]; text.axis=UILayoutConstraintAxisVertical; text.spacing=7;
-    UIStackView *row=[[UIStackView alloc] initWithArrangedSubviews:@[tile,text]]; row.axis=UILayoutConstraintAxisHorizontal; row.spacing=14; row.alignment=UIStackViewAlignmentCenter;
-    row.translatesAutoresizingMaskIntoConstraints=NO; [card addSubview:row];
-    [NSLayoutConstraint activateConstraints:@[[row.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:18],[row.trailingAnchor constraintLessThanOrEqualToAnchor:card.trailingAnchor constant:-18],[row.topAnchor constraintEqualToAnchor:card.topAnchor constant:18],[row.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-18]]];
-    return card;
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}
 

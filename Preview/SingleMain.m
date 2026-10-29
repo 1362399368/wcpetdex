@@ -8,6 +8,10 @@
 #import "WPCollectorChecks.h"
 #import "WPThumbnailOptimizationChecks.h"
 #import "WPRankingUIChecks.h"
+#import "WPMenuConfigurationChecks.h"
+#import "WPQuickAvatarGestureChecks.h"
+#import "WPHomePresentationChecks.h"
+extern void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     if ([root.accessibilityIdentifier isEqualToString:identifier]) return root;
@@ -74,7 +78,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
 @implementation WPSinglePreviewHome
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"zhour-single 测试";
+    self.title = @"Zhour 测试";
     self.view.backgroundColor = UIColor.systemBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"桌宠设置" style:UIBarButtonItemStylePlain target:self action:@selector(settings)];
 }
@@ -150,7 +154,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
     checks[@"telegramEntryAbsent"] = @(home && !WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") && !WPContainsText(home.view, @"Telegram"));
     checks[@"versionDiagnosticsSectionAbsent"] = @(home && !WPContainsText(home.view, @"版本与诊断") && !WPContainsText(home.view, @"导出适配诊断"));
-    checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, @"zhour-single"));
+    checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, @"Zhour"));
     checks[@"introductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction"));
     UIViewController *intro=[NSClassFromString(@"WPPluginIntroductionController") new];
     intro.view.frame=self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
@@ -160,11 +164,17 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     [checks addEntriesFromDictionary:WPCollectorPreviewChecks()];
     [checks addEntriesFromDictionary:WPThumbnailOptimizationChecks()];
     [checks addEntriesFromDictionary:WPRankingUIPreviewChecks()];
-    BOOL all = YES;
-    for (NSNumber *value in checks.allValues) all &= value.boolValue;
-    NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
-    NSData *out = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];
-    [out writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"single-preview-report.json"] atomically:YES];
+    [checks addEntriesFromDictionary:WPMenuConfigurationPreviewChecks()];
+    [checks addEntriesFromDictionary:WPQuickAvatarGestureChecks()];
+    [checks addEntriesFromDictionary:WPHomePresentationChecks()];
+    WPAdvisorProviderPreviewChecks(^(NSDictionary<NSString *,NSNumber *> *providerChecks){
+        [checks addEntriesFromDictionary:providerChecks];
+        BOOL all = YES;
+        for (NSNumber *value in checks.allValues) all &= value.boolValue;
+        NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
+        NSData *out = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];
+        [out writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"single-preview-report.json"] atomically:YES];
+    });
 }
 @end
 int main(int argc, char *argv[]) { @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(WPSinglePreviewDelegate.class)); } }

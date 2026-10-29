@@ -14,14 +14,16 @@ NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange
 extern NSString * _Nullable WPEmbeddedResourceDirectory(void);
 
 NSBundle *WPResourceBundle(void) {
-    for (NSString *name in @[@"SinglePet-zhour", @"zhour-single"]) {
+    for (NSString *name in @[@"Zhour", @"SinglePet-zhour", @"zhour-single"]) {
         NSURL *url = [[NSBundle mainBundle] URLForResource:name withExtension:@"bundle"];
         if (url) return [NSBundle bundleWithURL:url];
     }
     Dl_info info;
     if (dladdr((const void *)&WPResourceBundle, &info) && info.dli_fname) {
         NSString *dir = [[NSString stringWithUTF8String:info.dli_fname] stringByDeletingLastPathComponent];
-        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
+        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"Zhour.bundle"],
+                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"Zhour.bundle"],
+                                      [dir stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
                                       [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
                                       [dir stringByAppendingPathComponent:@"zhour-single.bundle"],
                                       [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"zhour-single.bundle"]]) {

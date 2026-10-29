@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package an already built standalone zhour-single dylib as a Debian tweak."""
+"""Package an already built standalone Zhour dylib as a Debian tweak."""
 import argparse
 import gzip
 import io
@@ -8,8 +8,8 @@ from pathlib import Path
 import tarfile
 
 PACKAGE_ID = 'dev.zhour.wechatpet.single'
-BINARY = 'zhour-single.dylib'
-FILTER = 'zhour-single.plist'
+BINARY = 'Zhour.dylib'
+FILTER = 'Zhour.plist'
 
 
 def tar_gzip(files):
@@ -42,7 +42,7 @@ def main():
     parser.add_argument('--dylib', type=Path, required=True, help='already built signed standalone dylib')
     parser.add_argument('--output', type=Path, required=True, help='output .deb path')
     parser.add_argument('--scheme', choices=('rootful', 'rootless'), required=True)
-    parser.add_argument('--version', default='1.3.3')
+    parser.add_argument('--version', default='1.4.0')
     args = parser.parse_args()
     if not args.dylib.is_file():
         parser.error('dylib file does not exist')
@@ -56,7 +56,7 @@ def main():
     base = prefix + '/Library/MobileSubstrate/DynamicLibraries/'
     plist = plistlib.dumps({'Filter': {'Bundles': ['com.tencent.xin']}}, fmt=plistlib.FMT_XML, sort_keys=True)
     control = ('Package: ' + PACKAGE_ID + '\n'
-               'Name: zhour-single\n'
+               'Name: Zhour\n'
                'Version: ' + args.version + '\n'
                'Architecture: ' + architecture + '\n'
                'Description: Standalone WeChat desktop pet\n'

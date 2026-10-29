@@ -7,7 +7,7 @@ static NSDictionary *WPQCDefaults(void){
         @"buttonBadge":@NO,@"autoDock":@YES,@"linkPet":@YES,@"side":@0,@"style":@0,
         @"width":@76,@"height":@0,@"vertical":@0,@"radius":@28,@"opacity":@.92,@"background":@0,
         @"avatarSize":@44,@"showNames":@YES,@"nameGap":@4,@"sessionGap":@6,
-        @"customMode":@NO,@"filter":@0,@"tapMode":@0,@"holdMode":@1,@"separate":@NO,
+        @"customMode":@NO,@"filter":@0,@"tapMode":@0,@"doubleTapMode":@1,@"holdMode":@1,@"separate":@NO,
         @"unreadFirst":@YES,@"pinnedAlways":@NO,@"limit":@0,@"showRedDot":@YES,@"numericBadge":@YES,
         @"showMuted":@NO,@"showFolded":@NO,@"showService":@NO,@"showOfficial":@NO,@"edgeTapActions":@NO};});return defaults;
 }
@@ -19,7 +19,7 @@ static NSDictionary<NSString *,NSArray<NSNumber *> *> *WPQCRanges(void){
         @"openMode":@[@0,@1],@"side":@[@0,@1],@"style":@[@0,@1],@"width":@[@60,@180],@"height":@[@0,@900],
         @"vertical":@[@0,@1],@"radius":@[@0,@44],@"opacity":@[@.25,@1],@"background":@[@0,@3],
         @"avatarSize":@[@28,@72],@"nameGap":@[@0,@16],@"sessionGap":@[@0,@24],@"filter":@[@0,@2],
-        @"tapMode":@[@0,@2],@"holdMode":@[@0,@2],@"limit":@[@0,@500]};});return ranges;
+        @"tapMode":@[@0,@2],@"doubleTapMode":@[@0,@2],@"holdMode":@[@0,@2],@"limit":@[@0,@500]};});return ranges;
 }
 static CGFloat WPQCClampedNumber(NSString *key,CGFloat value){NSArray *range=WPQCRanges()[key];return range?MAX([range[0] doubleValue],MIN([range[1] doubleValue],value)):value;}
 BOOL WPQuickChatOptionBool(NSString *key){id value=WPQCValue(key);return [value isKindOfClass:NSNumber.class] && isfinite([value doubleValue]) && [value boolValue];}

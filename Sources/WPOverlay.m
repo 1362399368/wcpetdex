@@ -2,6 +2,7 @@
 #import "WPCommon.h"
 #import "WPPetRenderer.h"
 #import "WPRadialMenu.h"
+#import "WPMenuConfiguration.h"
 #import "WPSettings.h"
 #import "WPActionAdapter.h"
 #import "WPPartnerContact.h"
@@ -809,8 +810,14 @@ static CGRect WPOverlayPromptFrame(CGSize size,CGPoint preferred,CGRect safe,NSA
 - (BOOL)accessibilitySettings { [self settings]; return YES; }
 - (BOOL)accessibilityMenu { [self.menu showAroundPoint:self.pet.center inBounds:[self safeArea]];[self refreshBarrageState]; return YES; }
 - (void)execute:(NSString *)action {
-    if(![@[@"read",@"moments",@"advisor",@"quickChat",@"settings"] containsObject:action])return;
+    if(![WPMenuAvailableActions() containsObject:action])return;
     [[[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium] impactOccurred];
+    if([@[@"contact1",@"contact2",@"contact3"] containsObject:action]){
+        NSString *username=WPMenuContactUsername(action);
+        if(username.length)[self openQuickChat:username];
+        else [self showMessage:@"请先在长按菜单设置中选择联系人。"];
+        return;
+    }
     if([action isEqualToString:@"advisor"]){[self openChatAdvisor];return;}
     if([action isEqualToString:@"quickChat"]){[self performTapAction:WPTapActionQuickChat];return;}
     if([action isEqualToString:@"settings"]){[self settings];return;}

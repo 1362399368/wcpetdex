@@ -4,11 +4,11 @@
 #import "WPCommon.h"
 #import "WPBarragePreferences.h"
 
-void WPAddQuickChatGestureSettings(WPCardPageController *page) {
-    [page addSectionTitle:@"聊天头像操作"];
-    UIStackView *card=[page addCard];
+void WPAddQuickChatGestureRows(WPCardPageController *page,UIStackView *card) {
     UIView *tap=[page segmentedRowWithTitle:@"单击侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"tapMode") handler:^(NSInteger value){WPQuickChatSetOption(@"tapMode",@(value));}];
     tap.accessibilityIdentifier=@"WPQuickChatAvatarTapAction";[card addArrangedSubview:tap];
+    UIView *doubleTap=[page segmentedRowWithTitle:@"双击侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"doubleTapMode") handler:^(NSInteger value){WPQuickChatSetOption(@"doubleTapMode",@(value));}];
+    doubleTap.accessibilityIdentifier=@"WPQuickChatAvatarDoubleTapAction";[card addArrangedSubview:doubleTap];
     UIView *hold=[page segmentedRowWithTitle:@"长按侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"holdMode") handler:^(NSInteger value){WPQuickChatSetOption(@"holdMode",@(value));}];
     hold.accessibilityIdentifier=@"WPQuickChatAvatarHoldAction";[card addArrangedSubview:hold];
     if(!WPBarrageEnabled()){
@@ -17,6 +17,11 @@ void WPAddQuickChatGestureSettings(WPCardPageController *page) {
         UIView *mode=[page segmentedRowWithTitle:@"临时提示头像打开方式" items:@[@"小窗",@"全屏"] selected:(NSInteger)WPQuickChatOptionNumber(@"openMode") handler:^(NSInteger value){WPQuickChatSetOption(@"openMode",@(value));}];
         mode.accessibilityIdentifier=@"WPQuickChatArrivalAvatarMode";[card addArrangedSubview:mode];
     }
+}
+
+void WPAddQuickChatGestureSettings(WPCardPageController *page) {
+    [page addSectionTitle:@"聊天头像操作"];
+    WPAddQuickChatGestureRows(page,[page addCard]);
 }
 
 @interface WPQuickChatSettingsController () <UIColorPickerViewControllerDelegate>
