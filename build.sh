@@ -11,12 +11,12 @@ if [[ ( "$MODE" == device || "$MODE" == deb ) && -n "${WP_RUNTIME_DIAGNOSTIC_URL
 fi
 mkdir -p build
 SOURCES=(Sources/*.m)
-VERSION=1.4.0
-RELEASE_TAG=1.4.0
-BUILD_NUMBER=1400
+VERSION=1.4.1
+RELEASE_TAG=1.4.1
+BUILD_NUMBER=1401
 EDITION_DEFINE=0
 EDITION_LABEL=Zhour
-EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.4.0"')
+EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.4.1"')
 if [[ -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then EXTRA+=("-DWP_RUNTIME_DIAGNOSTIC_URL=@\"${WP_RUNTIME_DIAGNOSTIC_URL}\""); fi
 COMMON=(-fobjc-arc -fblocks -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -ISources -framework UIKit -framework Foundation -framework QuartzCore -framework CoreGraphics -framework ImageIO -framework Security -framework UniformTypeIdentifiers -lz)
 if [[ "$MODE" == device ]]; then

@@ -338,14 +338,11 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 }
 - (void)done{[self.view endEditing:YES];if(self.navigationController.presentingViewController)[self dismissViewControllerAnimated:YES completion:self.onClose];else if(self.onClose)self.onClose();}
 - (void)buildCards{
-    [self.stack addArrangedSubview:WPBuildHomeHeader()];
-    UIStackView *visibility=[self addCard];
-    UIView *hideRow=[self switchRowWithTitle:@"隐藏桌宠" detail:@"隐藏桌宠和浮动提示；可从微信设置再次进入这里，关闭开关恢复显示" on:![WPPreferences() boolForKey:@"enabled"] handler:^(BOOL hidden){
+    UIView *header=WPBuildHomeHeaderWithVisibility(![WPPreferences() boolForKey:@"enabled"],^(BOOL hidden){
         [WPPreferences() setBool:!hidden forKey:@"enabled"];
         [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
-    }];
-    for(UIView *view in hideRow.subviews)if([view isKindOfClass:UISwitch.class])view.accessibilityIdentifier=@"WPHidePetSwitch";
-    [visibility addArrangedSubview:hideRow];
+    });
+    [self.stack addArrangedSubview:header];
     __weak typeof(self) weakSelf=self;
     NSArray *features=@[
         @[@"快捷设置",@"点击、长按与摇晃",[UIImage systemImageNamed:@"bolt.fill"],UIColor.systemYellowColor,^{[weakSelf push:[WPQuickActionsController new]];}],
