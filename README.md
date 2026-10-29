@@ -10,7 +10,7 @@ SinglePet-zhour 是一款微信桌宠插件。默认形象是来自 Petdex 的�
 
 Telegram 交流与反馈：[加入群聊](https://t.me/+TdjkYED5H4Q3ZTdh)。
 
-聊天参谋在你主动使用时，会把选取的聊天内容发送给你配置的模型服务；API Key 保存在本机钥匙串。在线桌宠库和 Telegram 入口需要网络。
+聊天参谋在你主动使用时，会把选取的聊天内容发送给你配置的模型服务；API Key 保存在本机钥匙串。在线桌宠库和 Telegram 入口需要网络。 使用 DeepSeek 官方服务时，接口地址为 `https://api.deepseek.com`，推荐模型 `deepseek-flash`；需要使用 DeepSeek 官方 API Key，硅基流动的密钥不能混用。
 
 ## 安装与构建
 

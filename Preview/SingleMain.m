@@ -5,6 +5,7 @@
 #import "WPPetRenderer.h"
 #import "WPTapActions.h"
 #import "WPCollectorChecks.h"
+extern void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     if ([root.accessibilityIdentifier isEqualToString:identifier]) return root;
@@ -108,11 +109,14 @@ static BOOL WPContainsLabel(UIView *root, NSString *text) {
     intro.view.frame = self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
     checks[@"telegramInIntroductionVisible"] = @(intro && WPFindIdentifiedView(intro.view, @"WPOpenTelegramGroup") != nil);
     [checks addEntriesFromDictionary:WPCollectorPreviewChecks()];
-    BOOL all = YES;
-    for (NSNumber *value in checks.allValues) all &= value.boolValue;
-    NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
-    NSData *out = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];
-    [out writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"single-preview-report.json"] atomically:YES];
+    WPAdvisorProviderPreviewChecks(^(NSDictionary<NSString *,NSNumber *> *providerChecks){
+        [checks addEntriesFromDictionary:providerChecks];
+        BOOL all = YES;
+        for (NSNumber *value in checks.allValues) all &= value.boolValue;
+        NSDictionary *report = @{@"finished":@YES, @"allPassed":@(all), @"caseCount":@(checks.count), @"results":checks};
+        NSData *out = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];
+        [out writeToFile:[WPDataDirectory() stringByAppendingPathComponent:@"single-preview-report.json"] atomically:YES];
+    });
 }
 @end
 int main(int argc, char *argv[]) { @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(WPSinglePreviewDelegate.class)); } }

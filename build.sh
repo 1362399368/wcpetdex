@@ -11,12 +11,12 @@ if [[ ( "$MODE" == device || "$MODE" == deb ) && -n "${WP_RUNTIME_DIAGNOSTIC_URL
 fi
 mkdir -p build
 SOURCES=(Sources/*.m)
-VERSION=1.3.2
-RELEASE_TAG=1.3.2
-BUILD_NUMBER=1302
+VERSION=1.3.3
+RELEASE_TAG=1.3.3
+BUILD_NUMBER=1303
 EDITION_DEFINE=0
 EDITION_LABEL=SinglePet-zhour
-EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.3.2"')
+EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.3.3"')
 if [[ -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then EXTRA+=("-DWP_RUNTIME_DIAGNOSTIC_URL=@\"${WP_RUNTIME_DIAGNOSTIC_URL}\""); fi
 COMMON=(-fobjc-arc -fblocks -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -ISources -framework UIKit -framework Foundation -framework QuartzCore -framework CoreGraphics -framework ImageIO -framework Security -framework UniformTypeIdentifiers -lz)
 if [[ "$MODE" == device ]]; then
@@ -51,7 +51,7 @@ elif [[ "$MODE" == deb ]]; then
     python3 Tools/build-single-deb.py --dylib "$STAGE/SinglePet-zhour.dylib" --output "build/SinglePet-zhour-$RELEASE_TAG-$scheme.deb" --scheme "$scheme" --version "$VERSION"
   done
 elif [[ "$MODE" == preview || "$MODE" == preview-embedded ]]; then
-  PREVIEW_FIXTURES=(Preview/SingleMain.m Preview/WPCollectorChecks.m)
+  PREVIEW_FIXTURES=(Preview/SingleMain.m Preview/WPCollectorChecks.m Preview/WPAdvisorProviderChecks.m)
   if [[ "${WP_SOURCE_HOOK_FIXTURE:-1}" == 1 ]]; then PREVIEW_FIXTURES+=(Preview/WPContactMocks.m Preview/WPWeChatMocks.m); fi
   SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
   APP=build/WeChatPetPreview.app

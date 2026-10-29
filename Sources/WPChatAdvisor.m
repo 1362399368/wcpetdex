@@ -130,6 +130,10 @@ static NSURLSession *WPCASession(void) {
         NSURLSessionConfiguration *configuration=NSURLSessionConfiguration.ephemeralSessionConfiguration;
         configuration.timeoutIntervalForRequest=60;configuration.timeoutIntervalForResource=90;
         configuration.URLCache=nil;configuration.HTTPCookieStorage=nil;
+#ifdef WP_PREVIEW_HOST
+        Class mock=NSClassFromString(@"WPAdvisorMockURLProtocol");
+        if(mock)configuration.protocolClasses=@[mock];
+#endif
         session=[NSURLSession sessionWithConfiguration:configuration];
     });
     return session;
@@ -140,6 +144,21 @@ static BOOL WPCAAllowedURL(NSURL *url) {
     if([scheme isEqualToString:@"https"])return YES;
     return [scheme isEqualToString:@"http"] && [@[@"127.0.0.1",@"localhost",@"::1"] containsObject:host];
 }
+// DeepSeek's account console is not its API endpoint. Only rewrite the exact
+// official console root; never redirect an arbitrary host carrying a key.
+static NSString *WPCANormalizedBase(NSString *value) {
+    NSString *base=WPCATrim(value);
+    while([base hasSuffix:@"/"])base=[base substringToIndex:base.length-1];
+    NSURL *url=[NSURL URLWithString:base];
+    if([url.scheme.lowercaseString isEqual:@"https"] && [url.host.lowercaseString isEqual:@"platform.deepseek.com"] &&
+       !url.user && !url.password && !url.port && !url.query && !url.fragment && (!url.path.length || [url.path isEqual:@"/"]))
+        return @"https://api.deepseek.com";
+    return base;
+}
+static BOOL WPCAIsDeepSeek(NSString *base) {
+    NSURL *url=[NSURL URLWithString:base];
+    return [url.scheme.lowercaseString isEqual:@"https"] && [url.host.lowercaseString isEqual:@"api.deepseek.com"] && !url.port;
+}
 static NSString *WPCAHTTPError(NSInteger status,NSData *data) {
     NSString *detail=nil;
     id json=data.length?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;
@@ -149,7 +168,7 @@ static NSString *WPCAHTTPError(NSInteger status,NSData *data) {
         else if([json[@"error"] isKindOfClass:NSString.class])message=json[@"error"];
         if([message isKindOfClass:NSString.class] && [message length])detail=WPCAClip(message,80);
     }
-    NSString *reason=status==401?@"API Key 无效或已过期":status==403?@"没有权限使用这个模型，或账户未实名":status==404?@"模型或接口地址不存在，请检查模型名称":
+    NSString *reason=status==401?@"API Key 无效或已过期，请确认密钥与服务商对应":status==402?@"模型服务余额不足，请检查账户余额":status==403?@"没有权限使用这个模型，或账户未实名":status==404?@"模型或接口地址不存在，请检查模型名称":
         status==429?@"请求太频繁或额度不足":status>=500?@"模型服务暂时不可用，请稍后再试":[NSString stringWithFormat:@"请求失败（HTTP %ld）",(long)status];
     return detail?[NSString stringWithFormat:@"%@：%@",reason,detail]:reason;
 }
@@ -167,12 +186,11 @@ static NSString *WPCANetworkError(NSError *error) {
 + (void)setEnabled:(BOOL)enabled {[WPPreferences() setBool:enabled forKey:@"chatAdvisorEnabled"];}
 + (BOOL)isReady {return self.isEnabled && self.hasAPIKey;}
 + (NSString *)baseURL {
-    NSString *value=WPCATrim([WPPreferences() stringForKey:@"chatAdvisorBaseURL"]);
+    NSString *value=WPCANormalizedBase([WPPreferences() stringForKey:@"chatAdvisorBaseURL"]);
     return value.length?value:WPChatAdvisorDefaultBaseURL;
 }
 + (BOOL)setBaseURL:(NSString *)value {
-    NSString *trimmed=WPCATrim(value);
-    while([trimmed hasSuffix:@"/"])trimmed=[trimmed substringToIndex:trimmed.length-1];
+    NSString *trimmed=WPCANormalizedBase(value);
     if(!trimmed.length){[WPPreferences() removeObjectForKey:@"chatAdvisorBaseURL"];return YES;}
     NSURL *url=[NSURL URLWithString:trimmed];
     if(!url || !WPCAAllowedURL(url))return NO;
@@ -180,6 +198,7 @@ static NSString *WPCANetworkError(NSError *error) {
 }
 + (NSString *)model {
     NSString *value=WPCATrim([WPPreferences() stringForKey:@"chatAdvisorModel"]);
+    if(WPCAIsDeepSeek(self.baseURL) && (!value.length || [value isEqualToString:WPChatAdvisorDefaultModel]))return @"deepseek-flash";
     return value.length?value:WPChatAdvisorDefaultModel;
 }
 + (void)setModel:(NSString *)model {
@@ -367,7 +386,10 @@ static NSString *WPCANetworkError(NSError *error) {
 + (void)analyzeLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group completion:(void (^)(WPChatAdvice *,NSString *))completion {
     if(!lines.count){completion(nil,@"当前聊天没有可分析的文字消息");return;}
     WPCAAnalyses++;
-    NSDictionary *body=[self requestBodyForLines:lines group:group preset:self.currentPreset customInstruction:self.customInstruction model:self.model];
+    NSMutableDictionary *body=[[self requestBodyForLines:lines group:group preset:self.currentPreset customInstruction:self.customInstruction model:self.model] mutableCopy];
+    // DeepSeek's thinking mode is on by default; this brief JSON task needs
+    // the output budget for the answer rather than hidden reasoning.
+    if(WPCAIsDeepSeek(self.baseURL))body[@"thinking"]=@{@"type":@"disabled"};
     [self postBody:body allowRetry:YES completion:^(NSString *content,NSString *error){
         NSString *parseError=nil;WPChatAdvice *advice=content?[WPChatAdvice adviceFromModelContent:content error:&parseError]:nil;
         if(!advice){WPCAFailures++;WPCALastFailure=error?@"request":@"parse";completion(nil,error ?: parseError);return;}
@@ -375,7 +397,9 @@ static NSString *WPCANetworkError(NSError *error) {
     }];
 }
 + (void)fetchModels:(void (^)(NSArray<NSString *> *,NSString *))completion {
-    NSString *key=WPCALoadKey();NSURL *url=[self endpoint:@"/models?type=text&sub_type=chat"];
+    NSURL *base=[NSURL URLWithString:self.baseURL];
+    NSString *path=[base.host.lowercaseString isEqual:@"api.siliconflow.cn"]?@"/models?type=text&sub_type=chat":@"/models";
+    NSString *key=WPCALoadKey();NSURL *url=[self endpoint:path];
     if(!key.length){completion(nil,@"请先保存 API Key");return;}
     if(!url){completion(nil,@"接口地址无效，请使用 https 地址");return;}
     NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];
@@ -399,7 +423,7 @@ static NSString *WPCANetworkError(NSError *error) {
     NSString *model=self.model;
     [self fetchModels:^(NSArray<NSString *> *models,NSString *error){
         if(!models){completion(NO,error);return;}
-        if([models containsObject:model])completion(YES,[NSString stringWithFormat:@"连接成功，当前模型 %@ 可用",model]);
+        if([models containsObject:model])completion(YES,[NSString stringWithFormat:@"连接成功，模型列表包含 %@。实际对话还需账户有可用额度。",model]);
         else completion(NO,[NSString stringWithFormat:@"连接成功，但模型列表里没有 %@，请重新选择模型",model]);
     }];
 }

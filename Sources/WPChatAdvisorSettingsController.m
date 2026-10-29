@@ -81,6 +81,7 @@
     UIStackView *service=[self addCard];
     [service addArrangedSubview:[self fieldRowWithTitle:@"API Key" field:self.keyField]];
     [service addArrangedSubview:[self fieldRowWithTitle:@"接口地址（留空用硅基流动）" field:self.urlField]];
+    [service addArrangedSubview:[self rowWithTitle:@"使用 DeepSeek 官方接口" detail:@"地址填入后请点保存，并使用 DeepSeek 官方 API Key" actionTitle:@"填入" handler:^{weakSelf.urlField.text=@"https://api.deepseek.com";}]];
     [service addArrangedSubview:[self buttonWithTitle:@"保存" primary:YES handler:^{[weakSelf saveService];}]];
     [service addArrangedSubview:[self rowWithTitle:@"模型" detail:WPChatAdvisor.model actionTitle:@"选择" handler:^{
         if(!WPChatAdvisor.hasAPIKey){[weakSelf alert:@"请先保存 API Key，再获取可用模型。"];return;}
@@ -88,7 +89,7 @@
     [service addArrangedSubview:[self rowWithTitle:@"测试连接" detail:self.testing?@"正在连接…":@"检查 Key、地址和当前模型" actionTitle:@"测试" handler:^{[weakSelf test];}]];
     if(keySaved)[service addArrangedSubview:[self rowWithTitle:@"删除 API Key" detail:@"从本机钥匙串移除" actionTitle:@"删除" handler:^{
         [WPChatAdvisor clearAPIKey];[WPChatAdvisor setEnabled:NO];[weakSelf changed];[weakSelf reloadCards];}]];
-    [self addNote:@"API Key 在硅基流动控制台「API 密钥」页面创建，保存在本机钥匙串。也可以填其他兼容 OpenAI 接口的服务地址。"];
+    [self addNote:@"硅基流动和 DeepSeek 官方的 API Key 不能混用。DeepSeek 官方地址为 https://api.deepseek.com，推荐模型 deepseek-flash；控制台网页地址会自动转换。API Key 保存在本机钥匙串。"];
 
     [self addSectionTitle:@"分析预设"];
     UIStackView *presets=[self addCard];
