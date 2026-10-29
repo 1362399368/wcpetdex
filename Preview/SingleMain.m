@@ -152,7 +152,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     checks[@"gesturesNotDuplicatedInPetSettings"] = @(petSettings && !WPFindIdentifiedView(petSettings.view, @"WPLongPressAction") && !WPFindIdentifiedView(petSettings.view, @"WPShakeAction"));
     UIViewController *home = [NSClassFromString(@"WPSettingsController") new];
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
-    checks[@"telegramEntryAbsent"] = @(home && !WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup") && !WPContainsText(home.view, @"Telegram"));
+    checks[@"telegramEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup"));
     checks[@"versionDiagnosticsSectionAbsent"] = @(home && !WPContainsText(home.view, @"版本与诊断") && !WPContainsText(home.view, @"导出适配诊断"));
     checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, @"Zhour"));
     checks[@"introductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction"));

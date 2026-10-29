@@ -25,6 +25,14 @@
 
 #pragma mark - Secondary pages
 
+static void WPOpenTelegramGroup(WPCardPageController *controller) {
+    NSURL *url=[NSURL URLWithString:@"https://t.me/+TdjkYED5H4Q3ZTdh"];
+    __weak WPCardPageController *weakController=controller;
+    [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success){
+        if(!success)dispatch_async(dispatch_get_main_queue(), ^{[weakController alert:@"无法打开 Telegram 群链接，请稍后重试。"];});
+    }];
+}
+
 @interface WPPluginIntroductionController : WPCardPageController
 @end
 @implementation WPPluginIntroductionController
@@ -358,6 +366,8 @@
     UIStackView *about=[self addCard];
     UIView *intro=[self rowWithTitle:@"插件介绍" detail:@"了解桌宠功能" actionTitle:nil handler:^{[weakSelf push:[WPPluginIntroductionController new]];}];
     intro.accessibilityIdentifier=@"WPPluginIntroduction";[about addArrangedSubview:intro];
+    UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"交流和问题反馈" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
+    group.accessibilityIdentifier=@"WPHomeTelegramGroup";[about addArrangedSubview:group];
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}
 
