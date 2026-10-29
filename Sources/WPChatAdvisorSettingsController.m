@@ -117,6 +117,7 @@
     UIStackView *continuousCard=[self addCard];
     WPAdvisorContinuousCoordinator *continuous=WPAdvisorContinuousCoordinator.sharedCoordinator;
     NSString *locked=continuous.lockedUsername;
+    NSString *continuousAccount=[continuous.accountToken copy];
     NSString *display=locked.length?[WPPartnerContact displayNameForUsername:locked]:@"";
     [continuousCard addArrangedSubview:[self rowWithTitle:@"锁定私聊联系人" detail:locked.length?(display.length?display:@"已选择联系人"):@"选择要开启连续对话的联系人" actionTitle:@"选择" handler:^{
         WPPartnerPickerController *picker=[[WPPartnerPickerController alloc] initWithStyle:UITableViewStyleInsetGrouped];picker.pickerTitle=@"选择连续对话联系人";
@@ -128,6 +129,12 @@
         if(enabled && !WPChatAdvisor.isReady){[weakSelf alert:@"请先启用聊天参谋并配置 API Key。"];[weakSelf reloadCards];return;}
         [WPAdvisorContinuousCoordinator.sharedCoordinator setEnabled:enabled];
         if(enabled && !WPAdvisorContinuousCoordinator.sharedCoordinator.enabled)[weakSelf alert:@"最多同时开启 8 个私聊，请先关闭其他联系人。"];
+        [weakSelf reloadCards];
+    }]];
+    if(locked.length && continuous.isEnabled)[continuousCard addArrangedSubview:[self switchRowWithTitle:@"有新消息时重新分析才能发送" detail:@"仅对该联系人生效；关闭后仍可使用已有建议" on:[continuous requiresFreshAnalysisForUsername:locked] handler:^(BOOL enabled){
+        WPAdvisorContinuousCoordinator *current=WPAdvisorContinuousCoordinator.sharedCoordinator;[current refreshAccountIfNeeded];
+        if(continuousAccount.length && [current.accountToken isEqualToString:continuousAccount] && [current.lockedUsername isEqualToString:locked] && current.isEnabled)
+            [current setRequiresFreshAnalysis:enabled forUsername:locked];
         [weakSelf reloadCards];
     }]];
     if(locked.length)[continuousCard addArrangedSubview:[self rowWithTitle:@"解除锁定" detail:@"关闭连续对话并移除所选联系人" actionTitle:@"解除" handler:^{[WPAdvisorContinuousCoordinator.sharedCoordinator setLockedUsername:nil];[weakSelf reloadCards];}]];

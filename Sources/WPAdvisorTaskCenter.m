@@ -1,6 +1,7 @@
 #import "WPAdvisorTaskCenter.h"
 #import "WPCommon.h"
 #import "WPSessionEligibility.h"
+#import "WPChatPresentationState.h"
 #import <CommonCrypto/CommonDigest.h>
 
 NSNotificationName const WPAdvisorTasksDidChangeNotification=@"WPAdvisorTasksDidChange";
@@ -23,6 +24,7 @@ NSString *WPAdvisorCurrentAccountFingerprint(void){
 
 @interface WPAdvisorTask ()
 @property(nonatomic,copy,readwrite) NSString *identifier,*username,*displayName;
+@property(nonatomic,copy,readwrite) NSString *presetIdentifier;
 @property(nonatomic,readwrite) WPAdvisorTaskState state;
 @property(nonatomic,readwrite) NSUInteger lineCount;
 @property(nonatomic,strong,readwrite) NSDate *createdAt;
@@ -30,6 +32,8 @@ NSString *WPAdvisorCurrentAccountFingerprint(void){
 @property(nonatomic,copy,readwrite) NSString *error;
 @property(nonatomic,readwrite) BOOL unread,stale;
 @property(nonatomic,copy) NSArray<WPChatLine *> *pendingLines;
+@property(nonatomic,copy) NSString *pendingCustomInstruction;
+@property(nonatomic,copy) NSString *pendingBaseURL,*pendingModel;
 @property(nonatomic) BOOL group;
 @property(nonatomic,strong) WPChatAdvisorRequest *request;
 @property(nonatomic,copy) NSString *accountFingerprint,*contextFingerprint;
@@ -53,6 +57,10 @@ BOOL WPAdvisorTaskBelongsToCurrentAccount(WPAdvisorTask *task){
 BOOL WPAdvisorTaskMatchesLines(WPAdvisorTask *task,NSArray<WPChatLine *> *lines){
     if(!WPAdvisorTaskBelongsToCurrentAccount(task) || !task.contextFingerprint.length)return NO;
     NSString *current=WPAdvisorContextFingerprint(lines,task.lineCount);return current.length && [current isEqualToString:task.contextFingerprint];
+}
+BOOL WPAdvisorSelectionIsCurrent(NSString *account,NSString *username,UIWindow *window){
+    if(!NSThread.isMainThread || !account.length || !username.length || !window)return NO;
+    return [WPAdvisorCurrentAccountFingerprint() isEqualToString:account] && [WPChatPresentationActiveUsernameInWindow(window) isEqualToString:username];
 }
 
 static NSString *WPAdvisorString(id value,NSUInteger maximum){
@@ -84,7 +92,7 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
     NSString *account=WPAdvisorCurrentAccountFingerprint();
     if((!account && !self.currentAccountFingerprint) || [account isEqualToString:self.currentAccountFingerprint])return NO;
     [self.expiryTimer invalidate];self.expiryTimer=nil;
-    for(WPAdvisorTask *task in self.tasks){if(task.state==WPAdvisorTaskQueued || task.state==WPAdvisorTaskRunning){[task.request cancel];task.request=nil;task.pendingLines=nil;task.state=WPAdvisorTaskCancelled;}}
+    for(WPAdvisorTask *task in self.tasks){if(task.state==WPAdvisorTaskQueued || task.state==WPAdvisorTaskRunning){[task.request cancel];task.request=nil;task.pendingLines=nil;task.pendingCustomInstruction=nil;task.pendingBaseURL=nil;task.pendingModel=nil;task.state=WPAdvisorTaskCancelled;}}
     [self.tasks removeAllObjects];[self.current removeAllObjects];self.currentAccountFingerprint=account;
     if(account.length)[self loadHistory];return YES;
 }
@@ -127,7 +135,7 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
     for(WPAdvisorTask *task in self.tasks){
         if(task.state!=WPAdvisorTaskCompleted || !task.advice)continue;
         [records addObject:@{@"id":task.identifier,@"account":self.currentAccountFingerprint,@"fingerprint":task.contextFingerprint?:@"",@"username":task.username,@"name":task.displayName,
-            @"created":@(task.createdAt.timeIntervalSince1970),@"lineCount":@(task.lineCount),
+            @"created":@(task.createdAt.timeIntervalSince1970),@"lineCount":@(task.lineCount),@"preset":task.presetIdentifier?:@"",
             @"unread":@(task.unread),@"stale":@(task.stale),@"advice":WPAdviceDictionary(task.advice)}];
     }
     NSData *data=[NSJSONSerialization dataWithJSONObject:records options:0 error:nil];
@@ -172,6 +180,7 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
         task.accountFingerprint=self.currentAccountFingerprint;
         NSString *fingerprint=WPAdvisorString(item[@"fingerprint"],64);task.contextFingerprint=fingerprint.length==64?fingerprint:nil;
         task.createdAt=[NSDate dateWithTimeIntervalSince1970:time];task.state=WPAdvisorTaskCompleted;task.advice=advice;
+        task.presetIdentifier=WPAdvisorString(item[@"preset"],64)?:@"";
         id count=item[@"lineCount"],unread=item[@"unread"],stale=item[@"stale"];
         task.lineCount=[count isKindOfClass:NSNumber.class]?MIN(40,[count unsignedIntegerValue]):0;
         task.unread=[unread isKindOfClass:NSNumber.class] && [unread boolValue];task.stale=[stale isKindOfClass:NSNumber.class] && [stale boolValue];
@@ -198,6 +207,9 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
     NSMutableArray *result=[NSMutableArray new];for(WPAdvisorTask *task in self.tasks)if(task.state==WPAdvisorTaskFailed)[result addObject:task];return result;
 }
 - (WPAdvisorTask *)submitUsername:(NSString *)username displayName:(NSString *)displayName lines:(NSArray<WPChatLine *> *)lines group:(BOOL)group {
+    return [self submitUsername:username displayName:displayName lines:lines group:group presetIdentifier:WPChatAdvisor.currentPreset.identifier];
+}
+- (WPAdvisorTask *)submitUsername:(NSString *)username displayName:(NSString *)displayName lines:(NSArray<WPChatLine *> *)lines group:(BOOL)group presetIdentifier:(NSString *)presetIdentifier {
     NSAssert(NSThread.isMainThread,@"Advisor task center is main-thread only");
     [self refreshAccount];
     if(!self.currentAccountFingerprint.length || !WPAdvisorString(username,256) || ![lines isKindOfClass:NSArray.class] || !lines.count)return nil;
@@ -209,25 +221,38 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
         if(snapshot.count>=40)break;
     }
     if(!snapshot.count)return nil;
+    WPChatAdvisorPreset *preset=[WPChatAdvisorPreset presetWithIdentifier:presetIdentifier];
+    if(![preset.identifier isEqualToString:presetIdentifier])return nil;
     WPAdvisorTask *old=self.current[username];
     NSUInteger queued=0;for(WPAdvisorTask *task in self.activeTasks)if(task.state==WPAdvisorTaskQueued && task!=old)queued++;
     if(queued>=WPAdvisorMaxWaiting)return nil;
     if(old)[self cancelTask:old];
     WPAdvisorTask *task=[WPAdvisorTask new];task.identifier=NSUUID.UUID.UUIDString;task.username=username;
+    task.presetIdentifier=preset.identifier;task.pendingCustomInstruction=[WPChatAdvisor.customInstruction copy]?:@"";
+    task.pendingBaseURL=[WPChatAdvisor.baseURL copy];task.pendingModel=[WPChatAdvisor.model copy];
     task.accountFingerprint=self.currentAccountFingerprint;task.contextFingerprint=WPAdvisorContextFingerprint(snapshot,snapshot.count);
     task.displayName=WPAdvisorString(displayName,128)?:@"联系人";task.createdAt=NSDate.date;task.pendingLines=snapshot;
-    task.lineCount=snapshot.count;task.group=group;task.state=WPAdvisorTaskQueued;
+    task.lineCount=snapshot.count;task.group=group || WPChatAdvisorIsGroupUsername(username);task.state=WPAdvisorTaskQueued;
     [self.tasks insertObject:task atIndex:0];self.current[username]=task;[self pump];[self changed];return task;
 }
 - (void)pump {
     NSUInteger running=0;for(WPAdvisorTask *task in self.tasks)if(task.state==WPAdvisorTaskRunning)running++;
     for(WPAdvisorTask *task in self.tasks.reverseObjectEnumerator){
         if(running>=WPAdvisorMaxConcurrent)break;if(task.state!=WPAdvisorTaskQueued)continue;
+        if(![task.pendingBaseURL isEqualToString:WPChatAdvisor.baseURL] || ![task.pendingModel isEqualToString:WPChatAdvisor.model]){
+            task.pendingLines=nil;task.pendingCustomInstruction=nil;task.pendingBaseURL=nil;task.pendingModel=nil;
+            task.state=WPAdvisorTaskFailed;task.error=@"模型服务或模型已更改，请重新发起分析。";
+            if(self.current[task.username]==task)[self.current removeObjectForKey:task.username];
+            continue;
+        }
         task.state=WPAdvisorTaskRunning;running++;
         NSArray *lines=task.pendingLines;task.pendingLines=nil;
+        WPChatAdvisorPreset *preset=[WPChatAdvisorPreset presetWithIdentifier:task.presetIdentifier];
+        NSString *custom=task.pendingCustomInstruction?:@"";task.pendingCustomInstruction=nil;
+        task.pendingBaseURL=nil;task.pendingModel=nil;
         __weak typeof(self) weakSelf=self;__weak WPAdvisorTask *weakTask=task;
         __block BOOL requestAssigned=NO;
-        task.request=[WPChatAdvisor startAnalysisOfLines:lines group:task.group completion:^(WPChatAdvice *advice,NSString *error){
+        task.request=[WPChatAdvisor startAnalysisOfLines:lines group:task.group preset:preset customInstruction:custom completion:^(WPChatAdvice *advice,NSString *error){
             dispatch_block_t finish=^{
                 typeof(self) self=weakSelf;WPAdvisorTask *task=weakTask;if(!self || !task)return;
                 if([self refreshAccount]){[self changed];return;}
@@ -253,7 +278,7 @@ static NSDictionary *WPAdviceDictionary(WPChatAdvice *value) {
     NSAssert(NSThread.isMainThread,@"Advisor task center is main-thread only");
     [self refreshAccount];
     if(![self.tasks containsObject:task] || (task.state!=WPAdvisorTaskQueued && task.state!=WPAdvisorTaskRunning))return;
-    [task.request cancel];task.request=nil;task.pendingLines=nil;task.state=WPAdvisorTaskCancelled;
+    [task.request cancel];task.request=nil;task.pendingLines=nil;task.pendingCustomInstruction=nil;task.pendingBaseURL=nil;task.pendingModel=nil;task.state=WPAdvisorTaskCancelled;
     if(self.current[task.username]==task)[self.current removeObjectForKey:task.username];
     [self.tasks removeObjectIdenticalTo:task];[self pump];[self changed];
 }

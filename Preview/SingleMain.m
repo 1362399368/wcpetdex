@@ -16,6 +16,8 @@
 extern NSDictionary *WPAdvisorTaskCenterPreviewChecks(void);
 extern NSDictionary *WPAdvisorReplyPreviewChecks(void);
 extern NSDictionary *WPAdvisorContextPreviewChecks(void);
+extern NSDictionary *WPAdvisorOverlayPreviewChecks(void);
+extern NSDictionary<NSString *,NSNumber *> *WPChoiceSheetPreviewChecks(void);
 extern void WPAdvisorIncomingHookChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 extern void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 
@@ -178,6 +180,8 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     [checks addEntriesFromDictionary:WPAdvisorContinuousChecks()];
     [checks addEntriesFromDictionary:WPAdvisorReplyPreviewChecks()];
     [checks addEntriesFromDictionary:WPAdvisorContextPreviewChecks()];
+    [checks addEntriesFromDictionary:WPAdvisorOverlayPreviewChecks()];
+    [checks addEntriesFromDictionary:WPChoiceSheetPreviewChecks()];
     WPAdvisorIncomingHookChecks(^(NSDictionary<NSString *,NSNumber *> *hookChecks){
     [checks addEntriesFromDictionary:hookChecks];
     WPAdvisorProviderPreviewChecks(^(NSDictionary<NSString *,NSNumber *> *providerChecks){

@@ -61,8 +61,7 @@ static const CGFloat WPCAPPadding=16,WPCAPHeader=46;
 
 - (void)resetContent {
     for(UIView *view in self.stack.arrangedSubviews){[self.stack removeArrangedSubview:view];[view removeFromSuperview];}
-    WPChatAdvisorPreset *preset=WPChatAdvisor.currentPreset;
-    self.titleLabel.text=[NSString stringWithFormat:@"聊天参谋 · %@",preset.title];
+    self.titleLabel.text=self.taskPresetTitle.length?[NSString stringWithFormat:@"聊天参谋 · %@",self.taskPresetTitle]:@"聊天参谋";
 }
 - (UILabel *)addText:(NSString *)text size:(CGFloat)size weight:(UIFontWeight)weight color:(UIColor *)color {
     UILabel *label=WPThemeLabel(text,size,weight,color);label.numberOfLines=0;[self.stack addArrangedSubview:label];return label;

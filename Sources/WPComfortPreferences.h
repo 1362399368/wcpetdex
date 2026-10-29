@@ -8,6 +8,8 @@ typedef NS_ENUM(NSInteger, WPReminderIntensity) {
 };
 FOUNDATION_EXPORT BOOL WPPositionLocked(void);
 FOUNDATION_EXPORT BOOL WPAllowUnreadPeek(void);
+/// Advisor results and WeChat unread avatars have independent edge behavior.
+FOUNDATION_EXPORT BOOL WPAllowAdvisorPeek(void);
 /// Normalized user anchor; keyboard avoidance must never write this value.
 FOUNDATION_EXPORT CGPoint WPPositionAnchorForBounds(CGSize bounds);
 FOUNDATION_EXPORT void WPStorePositionAnchor(CGPoint normalizedAnchor, CGSize bounds);

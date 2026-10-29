@@ -8,6 +8,11 @@ NSString * const WPChatAdvisorDefaultBaseURL=@"https://api.siliconflow.cn/v1";
 NSString * const WPChatAdvisorDefaultModel=@"deepseek-ai/DeepSeek-V3";
 NSString * const WPChatAdvisorCustomPresetIdentifier=@"custom";
 static const NSUInteger WPCALineTextLimit=300;
+BOOL WPChatAdvisorIsGroupUsername(NSString *username){
+    if(![username isKindOfClass:NSString.class])return NO;
+    NSString *lower=username.lowercaseString;
+    return [lower hasSuffix:@"@chatroom"] || [lower hasSuffix:@"@im.chatroom"];
+}
 
 static NSString *WPCATrim(id value) {
     return [value isKindOfClass:NSString.class]?[value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]:@"";
@@ -31,9 +36,11 @@ static NSString *WPCAClip(NSString *value,NSUInteger limit) {
 + (NSArray<WPChatAdvisorPreset *> *)builtinPresets {
     static NSArray *presets;static dispatch_once_t once;
     dispatch_once(&once,^{presets=@[
-        [self presetWithIdentifier:@"couple" title:@"恋爱聊天" summary:@"对象或暧昧对象，读情绪、给回应感"
-                       instruction:@"对方是恋人或暧昧对象。重点读出对方的情绪，以及想要的回应：陪伴、被在乎、被哄还是单纯分享。回复温柔自然、有回应感，不油腻、不说教、不敷衍。"],
-        [self presetWithIdentifier:@"friend" title:@"朋友日常" summary:@"熟人闲聊，轻松接话"
+        [self presetWithIdentifier:@"couple" title:@"恋爱聊天" summary:@"恋人沟通，读情绪、给回应感"
+                       instruction:@"对方是恋人。重点读出对方的情绪，以及想要的回应：陪伴、被在乎、被哄还是单纯分享。回复温柔自然、有回应感，不油腻、不说教、不敷衍。"],
+        [self presetWithIdentifier:@"flirt" title:@"暧昧聊天" summary:@"暧昧互动，自然回应、不冒进"
+                       instruction:@"对方是有好感或暧昧中的对象。结合聊天判断熟悉程度，自然回应，适度表达好感，不强行升级关系，不油腻，也不编造承诺。"],
+        [self presetWithIdentifier:@"friend" title:@"朋友闲聊" summary:@"熟人闲聊，轻松接话"
                        instruction:@"对方是朋友或熟人，以日常闲聊为主。回复轻松、口语化，可以接梗，不过度解读，也不要太客气。"],
         [self presetWithIdentifier:@"work" title:@"职场沟通" summary:@"同事、上级、客户，分清派活和催进度"
                        instruction:@"对方是同事、上级或客户。先判断是派活、催进度、问情况、提意见还是闲聊。回复礼貌清楚，交代事实和下一步，不替我承诺聊天里没有的时间和结果。"],
@@ -274,7 +281,7 @@ static NSString *WPCANetworkError(NSError *error) {
     for(id target in targets){list=[self messageListFromTarget:target route:&found];if(list)break;}
     if(!list){WPCALastRoute=@"unavailable";return nil;}
     if(route)*route=found;WPCALastRoute=found;
-    BOOL group=[username hasSuffix:@"@chatroom"];
+    BOOL group=WPChatAdvisorIsGroupUsername(username);
     NSMutableArray<WPChatLine *> *lines=[NSMutableArray new];
     NSUInteger scanned=0;
     for(id item in list.reverseObjectEnumerator){
@@ -400,11 +407,14 @@ static NSString *WPCANetworkError(NSError *error) {
     [self startAnalysisOfLines:lines group:group completion:completion];
 }
 + (WPChatAdvisorRequest *)startAnalysisOfLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group completion:(void (^)(WPChatAdvice *,NSString *))completion {
+    return [self startAnalysisOfLines:lines group:group preset:self.currentPreset customInstruction:self.customInstruction completion:completion];
+}
++ (WPChatAdvisorRequest *)startAnalysisOfLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group preset:(WPChatAdvisorPreset *)preset customInstruction:(NSString *)custom completion:(void (^)(WPChatAdvice *,NSString *))completion {
     NSAssert(NSThread.isMainThread,@"Start advisor analysis on main thread");
     WPChatAdvisorRequest *token=[WPChatAdvisorRequest new];
     if(!lines.count){completion(nil,@"当前聊天没有可分析的文字消息");return token;}
     WPCAAnalyses++;
-    NSMutableDictionary *body=[[self requestBodyForLines:lines group:group preset:self.currentPreset customInstruction:self.customInstruction model:self.model] mutableCopy];
+    NSMutableDictionary *body=[[self requestBodyForLines:lines group:group preset:preset customInstruction:custom model:self.model] mutableCopy];
     // DeepSeek's thinking mode is on by default; this brief JSON task needs
     // the output budget for the answer rather than hidden reasoning.
     if(WPCAIsDeepSeek(self.baseURL))body[@"thinking"]=@{@"type":@"disabled"};

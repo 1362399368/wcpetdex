@@ -51,6 +51,29 @@ static BOOL WPContinuousValidUsername(id object){
 - (BOOL)isEnabled{return [self isEnabledForUsername:self.lockedUsername];}
 - (BOOL)isEnabledForUsername:(NSString *)username{return username.length && [self.enabledSnapshot containsObject:username];}
 - (NSString *)accountKey:(NSString *)suffix {return self.accountFingerprint.length?[NSString stringWithFormat:@"advisor.continuous.%@.%@",self.accountFingerprint,suffix]:nil;}
+- (BOOL)requiresFreshAnalysisForUsername:(NSString *)username {
+    if(!NSThread.isMainThread)return NO;
+    [self refreshAccountIfNeeded];
+    if(!self.accountFingerprint.length || !WPContinuousValidUsername(username) || ![self isEnabledForUsername:username])return NO;
+    id raw=[WPPreferences() objectForKey:[self accountKey:@"requireFresh"]];
+    id value=[raw isKindOfClass:NSDictionary.class]?raw[username]:nil;
+    return [value isKindOfClass:NSNumber.class] && [value boolValue];
+}
+- (void)setRequiresFreshAnalysis:(BOOL)enabled forUsername:(NSString *)username {
+    // Never queue a write across a potential account switch.
+    if(!NSThread.isMainThread)return;
+    [self refreshAccountIfNeeded];
+    if(!self.accountFingerprint.length || !WPContinuousValidUsername(username) ||
+       (![self.lockedUsername isEqualToString:username] && ![self isEnabledForUsername:username]))return;
+    NSString *key=[self accountKey:@"requireFresh"];id raw=[WPPreferences() objectForKey:key];
+    NSMutableDictionary *settings=[NSMutableDictionary new];
+    if([raw isKindOfClass:NSDictionary.class])for(id contact in raw){
+        id value=raw[contact];if(WPContinuousValidUsername(contact) && [value isKindOfClass:NSNumber.class] && [value boolValue])settings[contact]=@YES;
+    }
+    if(enabled)settings[username]=@YES;else [settings removeObjectForKey:username];
+    if(settings.count)[WPPreferences() setObject:settings forKey:key];else [WPPreferences() removeObjectForKey:key];
+    [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
+}
 - (void)refreshAccountIfNeeded {
     if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self refreshAccountIfNeeded];});return;}
     NSString *account=WPAdvisorCurrentAccountFingerprint()?:@"";

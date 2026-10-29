@@ -5,6 +5,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// The floating analysis card above a native chat. All calls run on main.
 @interface WPChatAdvisorPanel : UIView
 @property(nonatomic,copy) NSString *conversationUsername;
+/// Scene attached to this result, independent from the current default.
+@property(nonatomic,copy,nullable) NSString *taskPresetTitle;
 @property(nonatomic,copy,nullable) void (^onClose)(void);
 @property(nonatomic,copy,nullable) void (^onRetry)(void);
 /// Tapping fills a reply; long pressing requests a direct send.

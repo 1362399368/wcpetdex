@@ -4,6 +4,7 @@
 
 BOOL WPPositionLocked(void) { return [WPPreferences() boolForKey:@"positionLocked"]; }
 BOOL WPAllowUnreadPeek(void) { return [WPPreferences() boolForKey:@"allowUnreadPeek"]; }
+BOOL WPAllowAdvisorPeek(void) { id value=[WPPreferences() objectForKey:@"allowAdvisorPeek"];return [value isKindOfClass:NSNumber.class]?[value boolValue]:YES; }
 static NSString *WPAnchorKey(CGSize bounds, BOOL horizontal) {
     return [NSString stringWithFormat:@"position%@%@",bounds.width>bounds.height?@"Landscape":@"Portrait",horizontal?@"X":@"Y"];
 }

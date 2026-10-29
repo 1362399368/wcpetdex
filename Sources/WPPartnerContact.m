@@ -2,6 +2,7 @@
 #import "WPCommon.h"
 #import "WPResizableChat.h"
 #import "WPChatPresentationState.h"
+#import "WPAdvisorTaskCenter.h"
 #import <objc/runtime.h>
 
 static char WPHalfNavigationKey;
@@ -322,7 +323,14 @@ static NSString *WPNameForContact(id contact) {
     }
     UIViewController *owned=[self ownedChatPresentationInWindow:window];
     if(mode!=0 && mode!=3){
-        if(owned && owned.presentingViewController){[[WPResizableChatController coordinatorForController:owned] endHeightAdjustment];[owned dismissViewControllerAnimated:YES completion:^{WPChatPresentationNotifyChanged();[self openConversationWithUsername:username inWindow:window completion:completion];}];}
+        if(owned && owned.presentingViewController){
+            NSString *account=WPAdvisorCurrentAccountFingerprint();
+            [[WPResizableChatController coordinatorForController:owned] endHeightAdjustment];
+            [owned dismissViewControllerAnimated:YES completion:^{
+                if(account.length && ![account isEqualToString:WPAdvisorCurrentAccountFingerprint()]){completion(NO,@"微信账号已变化，请重新选择会话。");return;}
+                WPChatPresentationNotifyChanged();[self openConversationWithUsername:username inWindow:window completion:completion];
+            }];
+        }
         else [self openConversationWithUsername:username inWindow:window completion:completion];return;
     }
     if(!window.rootViewController){completion(NO,@"未找到微信主窗口，请回到微信主页后重试。");return;}
@@ -332,8 +340,12 @@ static NSString *WPNameForContact(id contact) {
         if(!owned.presentingViewController || owned.isBeingPresented || owned.isBeingDismissed || current.presentedViewController){completion(NO,@"请先关闭当前聊天窗口后再切换。");return;}
         // Reopen through the native page-sheet API. Pushing an ordinary chat into
         // its private navigation stack bypasses native keyboard/quote setup.
+        NSString *account=WPAdvisorCurrentAccountFingerprint();
         [[WPResizableChatController coordinatorForController:owned] endHeightAdjustment];
-        [owned dismissViewControllerAnimated:YES completion:^{WPChatPresentationNotifyChanged();[self openConversationWithUsername:username inWindow:window presentationMode:mode completion:completion];}];return;
+        [owned dismissViewControllerAnimated:YES completion:^{
+            if(account.length && ![account isEqualToString:WPAdvisorCurrentAccountFingerprint()]){completion(NO,@"微信账号已变化，请重新选择会话。");return;}
+            WPChatPresentationNotifyChanged();[self openConversationWithUsername:username inWindow:window presentationMode:mode completion:completion];
+        }];return;
     }
     UIViewController *presenter=[self visibleController:window.rootViewController];
     id contact=WPContactForUsername(WPContactService(),username);Class contactClass=NSClassFromString(@"CContact");

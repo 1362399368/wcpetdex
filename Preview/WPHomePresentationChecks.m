@@ -100,6 +100,9 @@ static NSDictionary<NSString *,NSNumber *> *WPHomeNavigationChecks(void) {
     }
     [navigation setViewControllers:@[home] animated:NO];[home.view layoutIfNeeded];
     UIControl *intro=(id)WPHomeFind(home.view,@"WPPluginIntroduction");WPHomeScrollToView(home.view,intro);
+    UIScrollView *scroll=WPHomeScrollView(home.view);
+    CGFloat bottom=MAX(-scroll.adjustedContentInset.top,scroll.contentSize.height-scroll.bounds.size.height+scroll.adjustedContentInset.bottom);
+    [scroll setContentOffset:CGPointMake(scroll.contentOffset.x,bottom) animated:NO];[home.view layoutIfNeeded];
     UIView *introCircle=WPHomeFind(intro,@"WPHomeFeatureCircle");
     CGPoint center=[intro convertPoint:CGPointMake(CGRectGetMidX(introCircle.frame),CGRectGetMidY(introCircle.frame)) toView:navigation.view];
     BOOL introHit=intro && introCircle && [navigation.view hitTest:center withEvent:nil]==intro;
@@ -131,6 +134,35 @@ static NSDictionary<NSString *,NSNumber *> *WPHomeSmallScreenChecks(void) {
     }
     window.hidden=YES;window.rootViewController=nil;
     detail[@"homeSmallScreenIconsContained"]=@(contained);detail[@"homeSmallScreenEntriesHittable"]=@(hittable);return detail;
+}
+static NSDictionary<NSString *,NSNumber *> *WPHomeCompactGridChecks(void) {
+    NSMutableDictionary *results=[NSMutableDictionary new];
+    for(NSArray<NSNumber *> *size in @[@[@320,@568],@[@390,@844],@[@430,@1200]]){
+        CGFloat width=size[0].doubleValue,height=size[1].doubleValue;
+        UIWindow *window=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,width,height)];
+        UIViewController *home=[NSClassFromString(@"WPSettingsController") new];
+        UINavigationController *navigation=[[WPHomeTestNavigationController alloc] initWithRootViewController:home];
+        window.rootViewController=navigation;window.hidden=NO;
+        [window layoutIfNeeded];[navigation.view layoutIfNeeded];[home.view layoutIfNeeded];
+        NSArray *names=@[@"快捷设置",@"桌宠设置",@"聊天弹幕",@"聊天参谋"];
+        NSMutableArray<NSValue *> *frames=[NSMutableArray new];BOOL valid=YES;
+        for(NSString *name in names){
+            UIControl *control=WPHomeControlWithLabel(home.view,name);UIView *circle=WPHomeFind(control,@"WPHomeFeatureCircle");
+            valid &= control && circle && CGRectGetWidth(circle.bounds)>=80;
+            [frames addObject:[NSValue valueWithCGRect:circle?[circle convertRect:circle.bounds toView:home.view]:CGRectZero]];
+        }
+        CGRect a=frames[0].CGRectValue,b=frames[1].CGRectValue,c=frames[2].CGRectValue,d=frames[3].CGRectValue;
+        CGFloat topGap=CGRectGetMinX(b)-CGRectGetMaxX(a),bottomGap=CGRectGetMinX(d)-CGRectGetMaxX(c);
+        CGFloat leftGap=CGRectGetMinY(c)-CGRectGetMaxY(a),rightGap=CGRectGetMinY(d)-CGRectGetMaxY(b);
+        CGFloat center=(CGRectGetMinX(a)+CGRectGetMaxX(b))/2;
+        BOOL compact=valid && topGap>=0 && topGap<=24 && bottomGap>=0 && bottomGap<=24 &&
+            leftGap>=0 && leftGap<=45 && rightGap>=0 && rightGap<=45 && fabs(center-width/2)<2;
+        UIControl *intro=WPHomeControlWithLabel(home.view,@"插件介绍");CGRect introFrame=[intro convertRect:intro.bounds toView:home.view];
+        BOOL introBelow=intro && CGRectGetMinY(introFrame)>CGRectGetMaxY(c);
+        NSString *key=[NSString stringWithFormat:@"homeCompactGrid-%lux%lu",(unsigned long)width,(unsigned long)height];
+        results[key]=@(compact && introBelow);
+        window.hidden=YES;window.rootViewController=nil;
+    }return results;
 }
 NSDictionary<NSString *,NSNumber *> *WPHomePresentationChecks(void) {
     NSCAssert(NSThread.isMainThread,@"Run on main thread");
@@ -172,5 +204,6 @@ NSDictionary<NSString *,NSNumber *> *WPHomePresentationChecks(void) {
              @"homeGridEntryInvokesAction":@(entry),@"homeUnavailableAccountUsesPlaceholder":@(placeholder)} mutableCopy];
     [results addEntriesFromDictionary:WPHomeNavigationChecks()];
     [results addEntriesFromDictionary:WPHomeSmallScreenChecks()];
+    [results addEntriesFromDictionary:WPHomeCompactGridChecks()];
     [results addEntriesFromDictionary:WPHomeVisibilityChecks()];return results;
 }

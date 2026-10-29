@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Input items contain identifier, displayName and state strings only. No chat
 /// contents are needed or retained. All methods and callbacks run on the main thread.
 @interface WPAdvisorStatusView : UIView
+@property(nonatomic,readonly) NSUInteger unreadCount;
 @property(nonatomic,copy,nullable) void (^onCancelTask)(NSString *identifier);
 @property(nonatomic,copy,nullable) void (^onShowTasks)(void);
 @property(nonatomic,copy,nullable) void (^onOpenUnread)(void);

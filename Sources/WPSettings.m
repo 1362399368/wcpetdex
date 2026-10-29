@@ -22,6 +22,7 @@
 #import "WPChatAdvisorSettingsController.h"
 #import "WPHomePresentation.h"
 #import "WPMenuConfiguration.h"
+#import "WPChoiceSheet.h"
 
 #pragma mark - Secondary pages
 
@@ -143,17 +144,17 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     NSString *selected=WPConfiguredGestureAction(longPress);
     __weak typeof(self) weakSelf=self;
     return [self rowWithTitle:title detail:names[selected] actionTitle:@"选择" handler:^{
-        UIAlertController *dialog=[UIAlertController alertControllerWithTitle:title message:@"选择手势触发的功能" preferredStyle:UIAlertControllerStyleAlert];
+        NSMutableArray<WPChoiceItem *> *items=[NSMutableArray new];
+        NSDictionary *icons=@{@"menu":@"square.grid.2x2",@"quickChat":@"bubble.left.and.bubble.right",@"settings":@"gearshape",@"moments":@"camera",@"advisor":@"sparkles",@"advisorHistory":@"clock.arrow.circlepath",@"none":@"minus.circle"};
         for(NSString *value in values){
-            [dialog addAction:[UIAlertAction actionWithTitle:names[value] style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action){
+            [items addObject:[WPChoiceItem itemWithTitle:names[value] icon:icons[value] destructive:NO handler:^{
                 WPSetConfiguredGestureAction(longPress,value);
                 if([value isEqualToString:@"quickChat"])[WPPreferences() setBool:YES forKey:@"quickChatEnabled"];
                 [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
                 [weakSelf reloadCards];
             }]];
         }
-        [dialog addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [weakSelf presentViewController:dialog animated:YES completion:nil];
+        WPPresentChoiceSheet(weakSelf,title,items);
     }];
 }
 - (void)buildCards{
@@ -189,6 +190,9 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     UIStackView *edge=[self addCard];
     [edge addArrangedSubview:[self switchRowWithTitle:@"贴边自动收起" detail:@"靠边闲置约 3 秒后探头" on:[WPPreferences() boolForKey:@"autoPeek"] handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"autoPeek"];changed();}]];
     [edge addArrangedSubview:[self switchRowWithTitle:@"有未读时也允许收起" detail:@"贴边收起后仍显示未读头像，可直接点击进入聊天" on:WPAllowUnreadPeek() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"allowUnreadPeek"];changed();}]];
+    UIView *advisorPeek=[self switchRowWithTitle:@"有参谋红点时也允许收起" detail:@"收起后红点仍可点击；若同时有未读头像，还需开启上方开关" on:WPAllowAdvisorPeek() handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"allowAdvisorPeek"];changed();}];
+    ((UIStackView *)advisorPeek).arrangedSubviews.lastObject.accessibilityIdentifier=@"WPAllowAdvisorPeekSwitch";
+    [edge addArrangedSubview:advisorPeek];
     [self addNote:@"横屏与竖屏分别记住最后一次拖动的位置；键盘避让不会覆盖保存的位置。锁定后仍可拖动手指摇晃桌宠，人物本身保持原位。"];
 
     [self addSectionTitle:@"便捷聊天"];
@@ -208,7 +212,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
     [self addSectionTitle:@"恢复默认"];
     UIStackView *resetGestures=[self addCard];
     [resetGestures addArrangedSubview:[self rowWithTitle:@"恢复原来参数" detail:@"恢复本页手势及便捷聊天设置" actionTitle:@"恢复" handler:^{
-        for(NSString *key in @[@"menuScale",@"shakeSensitivity",@"positionLocked",@"singleTapAction",@"doubleTapAction",@"longPressAction",@"shakeAction",@"autoPeek",@"allowUnreadPeek",@"quickChatEnabled",@"quickChatFlash",@"quickChat.tapMode",@"quickChat.doubleTapMode",@"quickChat.holdMode",@"quickChat.edgeTapActions",@"quickChat.arrivalTap",@"quickChat.openMode"])[WPPreferences() removeObjectForKey:key];
+        for(NSString *key in @[@"menuScale",@"shakeSensitivity",@"positionLocked",@"singleTapAction",@"doubleTapAction",@"longPressAction",@"shakeAction",@"autoPeek",@"allowUnreadPeek",@"allowAdvisorPeek",@"quickChatEnabled",@"quickChatFlash",@"quickChat.tapMode",@"quickChat.doubleTapMode",@"quickChat.holdMode",@"quickChat.edgeTapActions",@"quickChat.arrivalTap",@"quickChat.openMode"])[WPPreferences() removeObjectForKey:key];
         WPMenuResetActions();changed();[weakSelf reloadCards];}]];
 }
 @end
@@ -336,7 +340,7 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
 - (void)viewWillAppear:(BOOL)animated{[super viewWillAppear:animated];[self reloadCards];}
 - (void)viewDidLayoutSubviews{
     [super viewDidLayoutSubviews];
-    // Two columns normally, one column on very narrow widths.
+    // Refresh layout after rotation or a width change.
     if(fabs(self.view.bounds.size.width-self.builtWidth)>1){self.builtWidth=self.view.bounds.size.width;[self reloadCards];}
 }
 - (void)done{[self.view endEditing:YES];if(self.navigationController.presentingViewController)[self dismissViewControllerAnimated:YES completion:self.onClose];else if(self.onClose)self.onClose();}
@@ -352,29 +356,42 @@ static void WPOpenTelegramGroup(WPCardPageController *controller) {
         @[@"桌宠设置",@"外观、切换桌宠与位置",[UIImage systemImageNamed:@"slider.horizontal.3"],WPThemePrimaryText(),^{[weakSelf push:[WPPetSettingsController new]];}],
         @[@"聊天弹幕",@"半透明消息 · 头像停靠",[UIImage systemImageNamed:@"text.bubble.fill"],UIColor.systemTealColor,^{[weakSelf push:[WPBarrageSettingsController new]];}],
         @[@"聊天参谋",WPChatAdvisor.isReady?@"意图分析 · 建议回复":@"接入硅基流动后使用",[UIImage systemImageNamed:@"sparkles"],UIColor.systemPurpleColor,^{[weakSelf push:[WPChatAdvisorSettingsController new]];}]];
+    // Keep the four entries together instead of letting each row expand to
+    // the full width or absorb the vertical space intended for the spacer.
+    UIView *gridWrapper=[UIView new];gridWrapper.accessibilityIdentifier=@"WPHomeFeatureGrid";
+    UIStackView *grid=[UIStackView new];grid.axis=UILayoutConstraintAxisVertical;grid.spacing=4;
+    grid.translatesAutoresizingMaskIntoConstraints=NO;[gridWrapper addSubview:grid];
+    NSLayoutConstraint *gridWidth=[grid.widthAnchor constraintEqualToConstant:200];gridWidth.priority=UILayoutPriorityDefaultHigh;
+    [NSLayoutConstraint activateConstraints:@[gridWidth,[grid.widthAnchor constraintLessThanOrEqualToAnchor:gridWrapper.widthAnchor],
+        [grid.centerXAnchor constraintEqualToAnchor:gridWrapper.centerXAnchor],
+        [grid.topAnchor constraintEqualToAnchor:gridWrapper.topAnchor],
+        [grid.bottomAnchor constraintEqualToAnchor:gridWrapper.bottomAnchor]]];
     NSUInteger columns=2;
     for(NSUInteger start=0;start<features.count;start+=columns){
-        UIStackView *line=[UIStackView new];line.axis=UILayoutConstraintAxisHorizontal;line.spacing=12;line.distribution=UIStackViewDistributionFillEqually;line.alignment=UIStackViewAlignmentFill;
+        UIStackView *line=[UIStackView new];line.axis=UILayoutConstraintAxisHorizontal;line.spacing=8;line.distribution=UIStackViewDistributionFillEqually;line.alignment=UIStackViewAlignmentFill;
+        [line.heightAnchor constraintEqualToConstant:124].active=YES;
         for(NSUInteger i=start;i<MIN(features.count,start+columns);i++){
             NSArray *item=features[i];void (^handler)(void)=item[4];
             UIControl *card=WPBuildHomeFeature(item[0],item[2],item[3],handler);
             card.accessibilityHint=item[1];
             [line addArrangedSubview:card];
         }
-        [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
+        [grid addArrangedSubview:line];
     }
+    [self.stack addArrangedSubview:gridWrapper];
     UIStackView *about=[self addCard];
     UIView *group=[self rowWithTitle:@"Telegram 群聊" detail:@"交流和问题反馈" actionTitle:@"打开" handler:^{WPOpenTelegramGroup(weakSelf);}];
     group.accessibilityIdentifier=@"WPHomeTelegramGroup";[about addArrangedSubview:group];
     UIView *spacer=[UIView new];[spacer.heightAnchor constraintGreaterThanOrEqualToConstant:0].active=YES;
-    NSLayoutConstraint *preferredZero=[spacer.heightAnchor constraintEqualToConstant:0];preferredZero.priority=UILayoutPriorityDefaultLow;preferredZero.active=YES;
+    NSLayoutConstraint *preferredZero=[spacer.heightAnchor constraintEqualToConstant:0];preferredZero.priority=1;preferredZero.active=YES;
     [self.stack addArrangedSubview:spacer];
     UIControl *intro=WPBuildHomeFeature(@"插件介绍",[UIImage systemImageNamed:@"info.circle.fill"],UIColor.systemBlueColor,^{[weakSelf push:[WPPluginIntroductionController new]];});
     intro.accessibilityIdentifier=@"WPPluginIntroduction";
     UIView *introRow=[UIView new];intro.translatesAutoresizingMaskIntoConstraints=NO;[introRow addSubview:intro];
     [NSLayoutConstraint activateConstraints:@[[intro.centerXAnchor constraintEqualToAnchor:introRow.centerXAnchor],
         [intro.topAnchor constraintEqualToAnchor:introRow.topAnchor],[intro.bottomAnchor constraintEqualToAnchor:introRow.bottomAnchor],
-        [intro.widthAnchor constraintEqualToConstant:150],[intro.widthAnchor constraintLessThanOrEqualToAnchor:introRow.widthAnchor]]];
+        [intro.widthAnchor constraintEqualToConstant:150],[intro.widthAnchor constraintLessThanOrEqualToAnchor:introRow.widthAnchor],
+        [intro.heightAnchor constraintEqualToConstant:124]]];
     [self.stack addArrangedSubview:introRow];
 }
 - (void)push:(UIViewController *)controller{[self.navigationController pushViewController:controller animated:YES];}

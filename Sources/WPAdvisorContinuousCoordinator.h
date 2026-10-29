@@ -23,6 +23,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setLockedUsername:(nullable NSString *)username;
 - (void)setEnabled:(BOOL)enabled;
 - (BOOL)isEnabledForUsername:(NSString *)username;
+/// A per-contact opt-in. Effective only while that contact's continuous mode is enabled.
+- (BOOL)requiresFreshAnalysisForUsername:(NSString *)username;
+- (void)setRequiresFreshAnalysis:(BOOL)enabled forUsername:(NSString *)username;
 - (BOOL)isFreshIncomingTimestamp:(NSTimeInterval)timestamp forUsername:(NSString *)username;
 /// Runs a short native-wrapper read only while this contact is opted in and
 /// foreground. Disable/background waits for any in-flight read to complete.

@@ -133,12 +133,12 @@ UIControl *WPBuildHomeFeature(NSString *title,UIImage *image,UIColor *tint,dispa
     [circle addSubview:icon];[control addSubview:circle];
     UILabel *label=WPThemeLabel(title,15,UIFontWeightSemibold,WPThemePrimaryText());label.userInteractionEnabled=NO;label.textAlignment=NSTextAlignmentCenter;
     label.numberOfLines=2;label.lineBreakMode=NSLineBreakByTruncatingTail;label.translatesAutoresizingMaskIntoConstraints=NO;[control addSubview:label];
-    [NSLayoutConstraint activateConstraints:@[[control.heightAnchor constraintGreaterThanOrEqualToConstant:130],
+    [NSLayoutConstraint activateConstraints:@[[control.heightAnchor constraintGreaterThanOrEqualToConstant:124],
         [circle.widthAnchor constraintEqualToConstant:88],[circle.heightAnchor constraintEqualToConstant:88],
-        [circle.topAnchor constraintEqualToAnchor:control.topAnchor constant:8],[circle.centerXAnchor constraintEqualToAnchor:control.centerXAnchor],
+        [circle.topAnchor constraintEqualToAnchor:control.topAnchor constant:4],[circle.centerXAnchor constraintEqualToAnchor:control.centerXAnchor],
         [icon.widthAnchor constraintEqualToConstant:40],[icon.heightAnchor constraintEqualToConstant:40],
         [icon.centerXAnchor constraintEqualToAnchor:circle.centerXAnchor],[icon.centerYAnchor constraintEqualToAnchor:circle.centerYAnchor],
-        [label.topAnchor constraintEqualToAnchor:circle.bottomAnchor constant:9],[label.leadingAnchor constraintEqualToAnchor:control.leadingAnchor],
+        [label.topAnchor constraintEqualToAnchor:circle.bottomAnchor constant:6],[label.leadingAnchor constraintEqualToAnchor:control.leadingAnchor],
         [label.trailingAnchor constraintEqualToAnchor:control.trailingAnchor],[label.bottomAnchor constraintLessThanOrEqualToAnchor:control.bottomAnchor constant:-5]]];
     if(handler)[control addAction:[UIAction actionWithHandler:^(__unused UIAction *action){handler();}] forControlEvents:UIControlEventTouchUpInside];
     return control;

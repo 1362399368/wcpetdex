@@ -53,6 +53,19 @@ NSDictionary<NSString *,NSNumber *> *WPAdvisorStatusPreviewChecks(void){
         CGPoint badgeCenter=CGPointMake(CGRectGetMidX(target.frame),CGRectGetMidY(target.frame));
         avoidance &= !target.hidden && !CGRectIntersectsRect(target.frame,avatarTouch) && [host hitTest:avatarCenter withEvent:nil]==avatar && [host hitTest:badgeCenter withEvent:nil]==target;
     }
+    // Peeked pets sit partly off-screen on either edge. Their badge must be
+    // clamped on-screen and remain independently tappable beside the avatar.
+    BOOL peekEdges=YES;
+    for(NSNumber *side in @[@0,@1]){
+        BOOL right=side.boolValue;
+        CGRect pet=CGRectMake(right?355:-55,350,88,100);
+        avatar.frame=CGRectMake(right?342:12,300,36,36);
+        [overlay setUnreadAvatarFrame:avatar.frame];
+        [overlay layoutInBounds:CGRectMake(0,44,390,766) petFrame:pet petVisible:YES];[overlay layoutIfNeeded];
+        UIControl *target=(id)WPAdvisorFind(overlay,@"WPAdvisorUnreadBadge");
+        CGPoint pt=CGPointMake(CGRectGetMidX(target.frame),CGRectGetMidY(target.frame));
+        peekEdges &= !target.hidden && CGRectContainsRect(overlay.bounds,target.frame) && !CGRectIntersectsRect(target.frame,CGRectInset(avatar.frame,-4,-4)) && [host hitTest:pt withEvent:nil]==target;
+    }
     UIView *topHost=[[UIView alloc] initWithFrame:CGRectMake(0,0,390,844)];
     WPAdvisorStatusView *topOverlay=[[WPAdvisorStatusView alloc] initWithFrame:topHost.bounds];[topHost addSubview:topOverlay];
     [topOverlay updateActiveTasks:tasks];[topOverlay updateUnreadCount:1];
@@ -87,6 +100,6 @@ NSDictionary<NSString *,NSNumber *> *WPAdvisorStatusPreviewChecks(void){
              @"advisorTaskOverflow":@(moreWorks),@"advisorBadgeHitAndAction":@(badgeWorks),@"advisorOverlayPassThrough":@(pass),
              @"advisorBadgeClearsAndHides":@(clears&&hiddenPet),@"advisorStatusRejectsMalformedInput":@(invalid),
              @"advisorHistorySelection":@(historyWorks),@"advisorHistoryEmptyState":@(empty),@"advisorFailureUsesViewLabel":@(failureAction),
-             @"advisorUnreadBadgeAvoidsLatestAvatar":@(avoidance),@"advisorTopBadgeAvoidsCapsules":@(topAvoidance),
+             @"advisorUnreadBadgeAvoidsLatestAvatar":@(avoidance),@"advisorPeekBadgeVisibleAndTappableAtBothEdges":@(peekEdges),@"advisorTopBadgeAvoidsCapsules":@(topAvoidance),
              @"advisorShortAreaKeepsCapsuleClickable":@(shortArea),@"advisorShortAreaShowsAllTasks":@(shortSummaryWorks)};
 }

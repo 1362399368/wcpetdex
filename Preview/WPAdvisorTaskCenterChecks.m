@@ -17,8 +17,10 @@ static NSString *WPTaskCheckPath;
 @implementation WPTaskCheckCenter
 - (NSString *)historyPath {return WPTaskCheckPath;}
 @end
-static NSMutableArray *WPTaskCheckCallbacks,*WPTaskCheckTokens;
-static WPChatAdvisorRequest *WPTaskStub(__unused id cls,__unused SEL command,__unused NSArray *lines,__unused BOOL group,void (^completion)(WPChatAdvice *,NSString *)){
+static NSMutableArray *WPTaskCheckCallbacks,*WPTaskCheckTokens,*WPTaskCheckPresets,*WPTaskCheckCustoms,*WPTaskCheckGroups;
+static WPChatAdvisorRequest *WPTaskStub(__unused id cls,__unused SEL command,__unused NSArray *lines,BOOL group,WPChatAdvisorPreset *preset,NSString *custom,void (^completion)(WPChatAdvice *,NSString *)){
+    [WPTaskCheckPresets addObject:preset.identifier?:@""];[WPTaskCheckCustoms addObject:custom?:@""];
+    [WPTaskCheckGroups addObject:@(group)];
     WPTaskCheckRequest *token=[WPTaskCheckRequest new];[WPTaskCheckTokens addObject:token];[WPTaskCheckCallbacks addObject:[completion copy]];return token;
 }
 static void WPTaskCheckSpin(void){[NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.03]];}
@@ -32,20 +34,26 @@ static WPChatAdvice *WPTaskCheckAdvice(void){
 NSDictionary<NSString *,NSNumber *> *WPAdvisorTaskCenterPreviewChecks(void){
     NSMutableDictionary *checks=[NSMutableDictionary new];
     WPTaskCheckPath=[NSTemporaryDirectory() stringByAppendingPathComponent:[@"wp-advisor-test-" stringByAppendingString:NSUUID.UUID.UUIDString]];
-    WPTaskCheckCallbacks=[NSMutableArray new];WPTaskCheckTokens=[NSMutableArray new];
-    Method method=class_getClassMethod(WPChatAdvisor.class,@selector(startAnalysisOfLines:group:completion:));
+    WPTaskCheckCallbacks=[NSMutableArray new];WPTaskCheckTokens=[NSMutableArray new];WPTaskCheckPresets=[NSMutableArray new];WPTaskCheckCustoms=[NSMutableArray new];WPTaskCheckGroups=[NSMutableArray new];
+    Method method=class_getClassMethod(WPChatAdvisor.class,@selector(startAnalysisOfLines:group:preset:customInstruction:completion:));
     IMP original=method_setImplementation(method,(IMP)WPTaskStub);
     id selfContact=WPSEReadObject(WPWeChatService(@"CContactMgr"),@[@"getSelfContact"]);
     NSString *savedSelf=[WPSEReadObject(selfContact,@[@"m_nsUsrName"]) copy];
+    NSString *savedCustom=[WPChatAdvisor.customInstruction copy];
+    id savedBase=[WPPreferences() objectForKey:@"chatAdvisorBaseURL"]?:NSNull.null;
+    id savedModel=[WPPreferences() objectForKey:@"chatAdvisorModel"]?:NSNull.null;
     @try {
         WPTaskCheckCenter *center=[WPTaskCheckCenter new];
         WPChatLine *line=[WPChatLine lineFromMe:NO speaker:@"sample" text:@"RAW_MESSAGE_DO_NOT_PERSIST" date:[NSDate dateWithTimeIntervalSince1970:1700000000]];
-        WPAdvisorTask *a=[center submitUsername:@"a" displayName:@"甲" lines:@[line] group:NO];
-        WPAdvisorTask *b=[center submitUsername:@"b" displayName:@"乙" lines:@[line] group:NO];
-        WPAdvisorTask *c=[center submitUsername:@"c" displayName:@"丙" lines:@[line] group:NO];
+        [WPChatAdvisor setCustomInstruction:@"原始补充"];
+        WPAdvisorTask *a=[center submitUsername:@"a" displayName:@"甲" lines:@[line] group:NO presetIdentifier:@"couple"];
+        WPAdvisorTask *b=[center submitUsername:@"b" displayName:@"乙" lines:@[line] group:NO presetIdentifier:@"friend"];
+        WPAdvisorTask *c=[center submitUsername:@"c" displayName:@"丙" lines:@[line] group:NO presetIdentifier:@"flirt"];
+        [WPChatAdvisor setCustomInstruction:@"后来的补充"];
         checks[@"advisorTasksBoundedTwoConcurrent"]=@(a.state==WPAdvisorTaskRunning && b.state==WPAdvisorTaskRunning && c.state==WPAdvisorTaskQueued && WPTaskCheckTokens.count==2);
         [center cancelTask:b];
         checks[@"advisorCancelStartsQueued"]=@([WPTaskCheckTokens[1] didCancel] && c.state==WPAdvisorTaskRunning && WPTaskCheckTokens.count==3);
+        checks[@"advisorSceneAndInstructionBoundAtSubmission"]=@([WPTaskCheckPresets isEqual:@[@"couple",@"friend",@"flirt"]] && [WPTaskCheckCustoms[2] isEqual:@"原始补充"] && [c.presetIdentifier isEqual:@"flirt"]);
         WPAdvisorTask *replacement=[center submitUsername:@"a" displayName:@"甲" lines:@[line] group:NO];
         checks[@"advisorReplacementCancelsPrevious"]=@([WPTaskCheckTokens[0] didCancel] && a.state==WPAdvisorTaskCancelled && replacement.state==WPAdvisorTaskRunning);
         void (^oldReply)(WPChatAdvice *,NSString *)=WPTaskCheckCallbacks[0];oldReply(WPTaskCheckAdvice(),nil);WPTaskCheckSpin();
@@ -93,6 +101,22 @@ NSDictionary<NSString *,NSNumber *> *WPAdvisorTaskCenterPreviewChecks(void){
         checks[@"advisorHistoryExpiresAfterThreeDays"]=@(center.history.count==0);
         [loaded clearHistory];checks[@"advisorHistoryCanBeCleared"]=@(loaded.history.count==0);
         [center cancelTask:replacement];
-    } @finally {if(selfContact && savedSelf)[selfContact setValue:savedSelf forKey:@"m_nsUsrName"];method_setImplementation(method,original);[NSFileManager.defaultManager removeItemAtPath:WPTaskCheckPath error:nil];}
+        WPTaskCheckCenter *guard=[WPTaskCheckCenter new];
+        WPAdvisorTask *first=[guard submitUsername:@"group@im.chatroom" displayName:@"群" lines:@[line] group:NO presetIdentifier:@"friend"];
+        BOOL groupDetected=first && [WPTaskCheckGroups.lastObject boolValue] && WPChatAdvisorIsGroupUsername(@"group@im.chatroom") && WPChatAdvisorIsGroupUsername(@"GROUP@CHATROOM");
+        WPChatLine *groupLine=[WPChatLine lineFromMe:NO speaker:@"private-wxid-member" text:@"hello" date:line.date];
+        NSDictionary *body=[WPChatAdvisor requestBodyForLines:@[groupLine] group:YES preset:[WPChatAdvisorPreset presetWithIdentifier:@"friend"] customInstruction:@"" model:@"fixture"];
+        NSString *content=body[@"messages"][1][@"content"];
+        checks[@"advisorGroupVariantsAnonymizeMembers"]=@(groupDetected && ![content containsString:@"private-wxid-member"] && [content containsString:@"成员1"]);
+        WPAdvisorTask *second=[guard submitUsername:@"service-b" displayName:@"乙" lines:@[line] group:NO presetIdentifier:@"friend"];
+        WPAdvisorTask *queued=[guard submitUsername:@"service-c" displayName:@"丙" lines:@[line] group:NO presetIdentifier:@"flirt"];
+        NSUInteger tokensBefore=WPTaskCheckTokens.count;
+        [WPChatAdvisor setBaseURL:@"https://other-provider.example/v1"];
+        [guard cancelTask:first];
+        checks[@"advisorQueuedTaskRejectsChangedService"]=@(second && queued.state==WPAdvisorTaskFailed && WPTaskCheckTokens.count==tokensBefore && [queued.error containsString:@"更改"]);
+        [guard cancelTask:second];
+    } @finally {
+        for(NSArray *entry in @[@[@"chatAdvisorBaseURL",savedBase],@[@"chatAdvisorModel",savedModel]])if(entry[1]==NSNull.null)[WPPreferences() removeObjectForKey:entry[0]];else [WPPreferences() setObject:entry[1] forKey:entry[0]];
+        [WPChatAdvisor setCustomInstruction:savedCustom];if(selfContact && savedSelf)[selfContact setValue:savedSelf forKey:@"m_nsUsrName"];method_setImplementation(method,original);[NSFileManager.defaultManager removeItemAtPath:WPTaskCheckPath error:nil];}
     return checks;
 }

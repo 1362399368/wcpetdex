@@ -11,12 +11,12 @@ if [[ ( "$MODE" == device || "$MODE" == deb ) && -n "${WP_RUNTIME_DIAGNOSTIC_URL
 fi
 mkdir -p build
 SOURCES=(Sources/*.m)
-VERSION=1.5.0
-RELEASE_TAG=1.5.0
-BUILD_NUMBER=1500
+VERSION=1.5.1
+RELEASE_TAG=1.5.1
+BUILD_NUMBER=1501
 EDITION_DEFINE=0
 EDITION_LABEL=Zhour
-EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.5.0"')
+EXTRA=(-DWP_BUILD_VERSION="$BUILD_NUMBER" -DWP_EDITION_ARIA="$EDITION_DEFINE" '-DWP_VERSION_STRING=@"1.5.1"')
 if [[ -n "${WP_RUNTIME_DIAGNOSTIC_URL:-}" ]]; then EXTRA+=("-DWP_RUNTIME_DIAGNOSTIC_URL=@\"${WP_RUNTIME_DIAGNOSTIC_URL}\""); fi
 COMMON=(-fobjc-arc -fblocks -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -ISources -framework UIKit -framework Foundation -framework QuartzCore -framework CoreGraphics -framework ImageIO -framework Security -framework UniformTypeIdentifiers -lz)
 if [[ "$MODE" == device ]]; then
@@ -51,7 +51,7 @@ elif [[ "$MODE" == deb ]]; then
     python3 Tools/build-single-deb.py --dylib "$STAGE/Zhour.dylib" --output "build/Zhour-$RELEASE_TAG-$scheme.deb" --scheme "$scheme" --version "$VERSION"
   done
 elif [[ "$MODE" == preview || "$MODE" == preview-embedded ]]; then
-  PREVIEW_FIXTURES=(Preview/SingleMain.m Preview/WPCollectorChecks.m Preview/WPThumbnailOptimizationChecks.m Preview/WPRankingUIChecks.m Preview/WPMenuConfigurationChecks.m Preview/WPQuickAvatarGestureChecks.m Preview/WPHomePresentationChecks.m Preview/WPAdvisorProviderChecks.m Preview/WPAdvisorStatusChecks.m Preview/WPAdvisorTaskCenterChecks.m Preview/WPAdvisorContinuousChecks.m Preview/WPAdvisorReplyChecks.m Preview/WPAdvisorContextChecks.m Preview/WPAdvisorIncomingHookChecks.m)
+  PREVIEW_FIXTURES=(Preview/SingleMain.m Preview/WPCollectorChecks.m Preview/WPThumbnailOptimizationChecks.m Preview/WPRankingUIChecks.m Preview/WPMenuConfigurationChecks.m Preview/WPQuickAvatarGestureChecks.m Preview/WPHomePresentationChecks.m Preview/WPAdvisorProviderChecks.m Preview/WPAdvisorStatusChecks.m Preview/WPAdvisorTaskCenterChecks.m Preview/WPAdvisorContinuousChecks.m Preview/WPAdvisorReplyChecks.m Preview/WPAdvisorContextChecks.m Preview/WPAdvisorIncomingHookChecks.m Preview/WPAdvisorOverlayChecks.m Preview/WPChoiceSheetChecks.m)
   if [[ "${WP_SOURCE_HOOK_FIXTURE:-1}" == 1 ]]; then PREVIEW_FIXTURES+=(Preview/WPContactMocks.m Preview/WPWeChatMocks.m); fi
   SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
   APP=build/WeChatPetPreview.app

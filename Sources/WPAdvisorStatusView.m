@@ -1,4 +1,5 @@
 #import "WPAdvisorStatusView.h"
+#import "WPChoiceSheet.h"
 #import "WPTheme.h"
 #import <math.h>
 
@@ -18,7 +19,7 @@ static NSString *WPAdvisorSafeString(id value,NSUInteger limit) {
 @property(nonatomic) CGRect petFrame;
 @property(nonatomic) CGRect unreadAvatarFrame;
 @property(nonatomic) BOOL petVisible;
-@property(nonatomic) NSUInteger unreadCount;
+@property(nonatomic,readwrite) NSUInteger unreadCount;
 @end
 
 @implementation WPAdvisorStatusView
@@ -212,10 +213,8 @@ static NSString *WPAdvisorSafeString(id value,NSUInteger limit) {
     NSString *identifier=self.records[(NSUInteger)indexPath.row][@"identifier"];if(self.onSelect)self.onSelect(identifier);
 }
 - (void)confirmClear {
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"清除参谋记录？" message:@"已保存的分析结果将被删除。" preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak typeof(self) weakSelf=self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"清除" style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction *action){if(weakSelf.onClear)weakSelf.onClear();}]];
-    [self presentViewController:alert animated:YES completion:nil];
+    WPChoiceItem *clear=[WPChoiceItem itemWithTitle:@"确认清除记录" icon:@"trash" destructive:YES handler:^{if(weakSelf.onClear)weakSelf.onClear();}];
+    WPPresentChoiceSheet(self,@"清除后无法恢复",@[clear]);
 }
 @end
