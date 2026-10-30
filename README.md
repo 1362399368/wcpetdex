@@ -18,4 +18,26 @@ DEB 包的内置噜噜资源随插件携带，不需要另装 `.bundle`。首次
 
 开发构建需要 macOS、Xcode iOS SDK、Python 3、支持 WebP 的 Pillow 和 OpenSSL。运行 `./build.sh deb single` 构建两种 DEB；`./build.sh device single` 构建 ZIP；`./build.sh preview-embedded single` 可构建模拟器预览。插件依赖微信内部接口，请在实际设备与微信版本上测试。
 
+## 双人互动版本
+
+同一份源码还能构建两个双人互动版本，构建时用第二个参数选择：
+
+| 参数 | 版本 | 默认形象 | 独有功能 | 产物 |
+| --- | --- | --- | --- | --- |
+| `single` | Zhour 1.5.3 | 噜噜 | 无配对 | `Zhour.dylib` + `Zhour.bundle`，或 DEB |
+| `zhouyou` | 周游专属包 1.3.0 | 玥 | 配对互动、隐身、工作日上班打卡提醒 | `WeChatPet.dylib` + `WeChatPet.bundle` |
+| `aria` | Aria专属版 5.3.0 | Aria | 配对互动 | `WeChatPet.dylib` + `WeChatPet.bundle` |
+
+```sh
+./build.sh device zhouyou
+./build.sh device aria
+./build.sh preview zhouyou
+```
+
+双人版只支持 `device` 和 `preview`，不出 DEB。两个双人版沿用此前版本的偏好域（`dev.zhour.wechatpet`）、数据目录（`WeChatPet`）、钥匙串和资源包名，注入时直接替换旧版即可保留配对、互动记录和已选桌宠；不要与 Zhour 同时注入。
+
+双人互动需要自建加密 WebSocket 服务，仓库提供 `Backend/`（Python + SQLite）和 `BackendCloudflare/`（Workers + Durable Objects，`BackendPages/` 为其网关）两种实现。`Config/backend.example.json` 中的地址故意不可用，构建前复制为 `Config/backend.json` 填入自己的服务，再用 `WP_BACKEND_CONFIG=Config/backend.json ./build.sh device zhouyou` 构建；`Config/backend.json` 已被 Git 忽略。
+
+双人版专属源码在 `Sources/Couple/`，只在双人版编译；共享源码里的接入点用 `WP_EDITION_COUPLE`、`WP_FEATURE_STEALTH`、`WP_FEATURE_WORK_CHECKIN` 区分，定义见 `Sources/WPEdition.h`。模拟器自检对三个版本都适用（见 `Tests/README.md`），双人版另加 `Preview/WPCoupleEditionChecks.m` 中的检查。
+
 内嵌资源经过 AES 混淆并验证内容完整性，发布构建移除部分符号。密钥位于客户端及公开源码中，这些措施只能增加直接提取的难度，不能保证防复制或防破解。软件按本仓库 MIT 许可发布；噜噜由 Petdex 用户 gitcjp 提供，素材不在软件 MIT 许可范围内，公开再分发前请确认素材授权，详见 `ASSET-LICENSE.md`。
