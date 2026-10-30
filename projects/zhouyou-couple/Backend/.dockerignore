@@ -1,8 +1,0 @@
-**
-!requirements.txt
-!server.py
-!config.py
-!migration.py
-!manage.py
-!probe.py
-!Dockerfile
