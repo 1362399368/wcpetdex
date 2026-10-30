@@ -1,4 +1,6 @@
 <p align="center">
+
+[Telegram 交流群](https://t.me/+TdjkYED5H4Q3ZTdh) · 插件设置首页也可打开。
   <img src="Resources/couple-header-icon.png" alt="WeChatPet-Zhouyou" width="100">
 </p>
 

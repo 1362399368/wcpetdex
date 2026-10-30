@@ -428,6 +428,14 @@ static void WPPerformLocalPreview(UIViewController *controller,NSString *kind){
         }
         [self.stack addArrangedSubview:line];[self.stack setCustomSpacing:12 afterView:line];
     }
+    UIStackView *community=[self addCard];
+    UIView *telegram=[self rowWithTitle:@"Telegram 交流群" detail:@"加入群聊交流" actionTitle:@"打开" handler:^{
+        NSURL *url=[NSURL URLWithString:@"https://t.me/+TdjkYED5H4Q3ZTdh"];
+        [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success){
+            if(!success)dispatch_async(dispatch_get_main_queue(),^{[weakSelf alert:@"无法打开 Telegram 群链接，请稍后重试。"] ;});
+        }];
+    }];
+    telegram.accessibilityIdentifier=@"WPHomeTelegramGroup";[community addArrangedSubview:telegram];
     [self addSectionTitle:@"版本与诊断"];
     UIStackView *about=[self addCard];
     NSString *wechat=[NSString stringWithFormat:@"%@ (%@)",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"未知",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"未知"];

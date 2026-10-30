@@ -1,5 +1,7 @@
 # WeChatPet-Aria 5.2.0
 
+[Telegram 交流群](https://t.me/+TdjkYED5H4Q3ZTdh) · 插件设置首页也可打开。
+
 WeChat iOS desktop pet plugin source snapshot for the aria edition. The two editions are independent TrollFools packages. This repository was assembled from a source directory without Git history; older changes are summarized in [CHANGELOG.md](CHANGELOG.md) from saved release notes.
 
 ## Build
