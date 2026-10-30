@@ -1,4 +1,5 @@
 #import "WPHomePresentationChecks.h"
+#import "WPEdition.h"
 #import "WPHomePresentation.h"
 #import "WPCommon.h"
 #import "WPSharedChatAvatar.h"
@@ -224,7 +225,7 @@ NSDictionary<NSString *,NSNumber *> *WPHomePresentationChecks(void) {
     while(image.image!=avatar && [until timeIntervalSinceNow]>0)[NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
     BOOL actualName=[name.text isEqualToString:@"我自己"];
     BOOL cachedAvatar=image.image==avatar;
-    BOOL title=[brand.text isEqualToString:@"Zhour"];
+    BOOL title=[brand.text isEqualToString:WP_EDITION_ARIA?@"Aria专属版":WPEditionName()];
     BOOL circular=image.layer.cornerRadius>0 && image.clipsToBounds;
     __block NSUInteger called=0;UIControl *feature=WPBuildHomeFeature(@"快捷设置",[UIImage systemImageNamed:@"bolt.fill"],UIColor.systemBlueColor,^{called++;});
     [feature sendActionsForControlEvents:UIControlEventTouchUpInside];

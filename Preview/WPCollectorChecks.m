@@ -100,7 +100,7 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     NSUInteger successful=manager.calls;
     for(NSUInteger i=0;i<100;i++)WPPreviewRegisterCollectorClass(good);
     r[@"collectorRepeatedInstallRegistersOnlyOnce"]=@(manager.calls==successful);
-    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:@"Zhour"]&&[manager.version isEqual:WPPluginVersion()]&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
+    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:WPEditionName()]&&[manager.version isEqual:WPPluginVersion()]&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
     WPCollectorTestManager *replacement=[WPCollectorTestManager new];sWPCollectorTestSingleton=replacement;
     r[@"collectorReplacementSingletonRegistersOnce"]=@(WPPreviewRegisterCollectorClass(good)&&replacement.calls==1);
 
@@ -146,7 +146,7 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     r[@"collectorNativeFallbackDoesNotDuplicate"]=@(sWPCollectorOriginalReloads==2&&table.sections.count==1);
     WPCollectorTestSection *visibleSection=table.sections.firstObject;
     NSDictionary *visibleCell=visibleSection.cells.firstObject;
-    r[@"collectorNativeEntryHasCorrectTitleAndAction"]=@([visibleCell[@"title"] isEqual:@"Zhour"]&&[visibleCell[@"action"] isEqual:@"wp_zhouyouOpenSettings"]&&visibleCell[@"target"]==native);
+    r[@"collectorNativeEntryHasCorrectTitleAndAction"]=@([visibleCell[@"title"] isEqual:WPEditionName()]&&[visibleCell[@"action"] isEqual:@"wp_zhouyouOpenSettings"]&&visibleCell[@"target"]==native);
     // Publish the actual standard class only now, emulating a later-loaded tweak.
     WPCollectorTestClass(@"WCPluginsMgr",(IMP)WPCollectorTestShared,"@16@0:8");
     WPCollectorTestManager *late=[WPCollectorTestManager new];sWPCollectorTestSingleton=late;
@@ -164,7 +164,7 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     WPCollectorTestManager *refine=[WPCollectorTestManager new],*standard=[WPCollectorTestManager new];
     sWPRefineTestSingleton=refine;sWPCollectorTestSingleton=standard;WPPreviewResetCollectorRegistration();
     WPInstallWeChatSettingsEntry();
-    r[@"collectorStandardFacadeHasPriority"]=@(standard.calls==1&&refine.calls==0&&[standard.title isEqual:@"Zhour"]);
+    r[@"collectorStandardFacadeHasPriority"]=@(standard.calls==1&&refine.calls==0&&[standard.title isEqual:WPEditionName()]);
     for(NSUInteger i=0;i<10;i++)WPInstallWeChatSettingsEntry();
     r[@"collectorStandardFacadeDoesNotDuplicate"]=@(standard.calls==1);
     sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();WPInstallWeChatSettingsEntry();

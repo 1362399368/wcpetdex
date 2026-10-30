@@ -2,6 +2,7 @@
 #import "WPMenuConfiguration.h"
 #import "WPRadialMenu.h"
 #import "WPCommon.h"
+#import "WPEdition.h"
 #import "WPSharedChatAvatar.h"
 extern void WPPreviewSeedSharedAvatar(NSString *, UIImage *);
 
@@ -22,6 +23,13 @@ static BOOL WPAdvisorIconHasDistinctColors(UIImage *image){
     return purple && teal && orange;
 }
 
+// Couple editions enable miss and anger by default. The layout checks below
+// count the shared items, so they start from the shared defaults only.
+static void WPMenuResetSharedActions(void){
+    WPMenuResetActions();
+    if(WP_EDITION_COUPLE){WPMenuSetActionEnabled(@"miss",NO);WPMenuSetActionEnabled(@"anger",NO);}
+}
+
 NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     NSCAssert(NSThread.isMainThread,@"Menu checks require main thread");
     NSUserDefaults *prefs=WPPreferences();NSString *orderKey=@"radialMenuOrder",*enabledKey=@"radialMenuEnabled";
@@ -29,7 +37,8 @@ NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     NSArray *contactKeys=@[@"radialMenu.contact1",@"radialMenu.contact2",@"radialMenu.contact3"];
     NSMutableArray *oldContacts=[NSMutableArray new];for(NSString *key in contactKeys)[oldContacts addObject:[prefs objectForKey:key]?:NSNull.null];
     WPMenuResetActions();NSMutableDictionary *checks=[NSMutableDictionary new];
-    checks[@"menuDefaultActions"]=@([WPMenuEnabledActions() isEqual:@[@"read",@"advisor",@"moments"]]);
+    checks[@"menuDefaultActions"]=@([WPMenuEnabledActions() isEqual:WP_EDITION_COUPLE?@[@"moments",@"miss",@"anger",@"read",@"advisor"]:@[@"read",@"advisor",@"moments"]]);
+    WPMenuResetSharedActions();
     WPMenuSetOrder(@[@"moments",@"advisor",@"read",@"quickChat",@"settings"]);
     WPMenuSetActionEnabled(@"advisor",NO);WPMenuSetActionEnabled(@"quickChat",YES);
     checks[@"menuOrderAndVisibilitySaved"]=@([WPMenuEnabledActions() isEqual:@[@"moments",@"read",@"quickChat"]]);
@@ -45,8 +54,9 @@ NSDictionary<NSString *,NSNumber *> *WPMenuConfigurationPreviewChecks(void){
     [menu cancel];WPMenuSetActionEnabled(@"moments",NO);[menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];
     checks[@"menuAllDisabledSafe"]=@(!menu.isShowing && menu.hidden && WPMenuEnabledActions().count==0);
     [prefs setObject:@[@"moments",@"unknown",@"moments"] forKey:orderKey];
-    checks[@"menuInvalidOrderSanitized"]=@([WPMenuOrderedActions() isEqual:@[@"moments",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"]]);
-    WPMenuResetActions();
+    NSArray *sanitized=WP_EDITION_COUPLE?@[@"moments",@"miss",@"anger",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"]:@[@"moments",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"];
+    checks[@"menuInvalidOrderSanitized"]=@([WPMenuOrderedActions() isEqual:sanitized]);
+    WPMenuResetSharedActions();
     [menu showAroundPoint:CGPointMake(195,350) inBounds:menu.bounds];buttons=[menu valueForKey:@"actionButtons"];
     id advisor=nil;for(id button in buttons)if([[button valueForKey:@"actionIdentifier"] isEqual:@"advisor"])advisor=button;
     UIImageView *advisorIcon=[advisor valueForKey:@"symbolView"];

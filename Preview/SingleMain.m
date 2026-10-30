@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import "WPCommon.h"
+#import "WPEdition.h"
 #import "WPOverlay.h"
 #import "WPPetRenderer.h"
 #import "WPPetCatalog.h"
@@ -21,6 +22,9 @@ extern void WPAdvisorDelayedReplyChecks(void (^completion)(NSDictionary<NSString
 extern NSDictionary<NSString *,NSNumber *> *WPChoiceSheetPreviewChecks(void);
 extern void WPAdvisorIncomingHookChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
 extern void WPAdvisorProviderPreviewChecks(void (^completion)(NSDictionary<NSString *,NSNumber *> *));
+#if WP_EDITION_COUPLE
+extern NSDictionary<NSString *,NSNumber *> *WPCoupleEditionPreviewChecks(CGRect frame);
+#endif
 
 static UIView *WPFindIdentifiedView(UIView *root, NSString *identifier) {
     if ([root.accessibilityIdentifier isEqualToString:identifier]) return root;
@@ -54,7 +58,10 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     NSString *paused=[directory.path stringByAppendingPathComponent:@"pet.json.unavailable"];
     NSMutableDictionary *results=[NSMutableDictionary new];
     NSError *error=nil;
-    BOOL copied=[fm copyItemAtURL:[NSURL fileURLWithPath:WPDefaultPetDirectory() isDirectory:YES] toURL:directory error:&error];
+    // DefaultPet carries a full atlas in every edition's preview bundle; Aria's
+    // bundled pet ships only its paged rows, which load from the bundle alone.
+    NSString *fixtureSource=[WPResourceDirectory() stringByAppendingPathComponent:@"DefaultPet"];
+    BOOL copied=[fm copyItemAtURL:[NSURL fileURLWithPath:fixtureSource isDirectory:YES] toURL:directory error:&error];
     NSMutableDictionary *metadata=copied?[[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:json] options:NSJSONReadingMutableContainers error:nil] mutableCopy]:nil;
     metadata[@"displayName"]=@"测试已下载桌宠";
     NSData *updated=metadata?[NSJSONSerialization dataWithJSONObject:metadata options:0 error:nil]:nil;
@@ -67,7 +74,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
         [shown reloadPet];
         results[@"temporaryFailureKeepsDisplayedPet"]=@(selected && unavailable && [shown.petName isEqual:@"测试已下载桌宠"] && [[shown valueForKey:@"needsReloadOnActivation"] boolValue]);
         WPPetRenderer *fallback=[[WPPetRenderer alloc] initWithFrame:CGRectMake(0,0,120,130)];
-        BOOL fellBack=[fallback.petName containsString:@"噜噜"] && [[fallback valueForKey:@"needsReloadOnActivation"] boolValue];
+        BOOL fellBack=[fallback.petName containsString:WPEditionDefaultPetName()] && [[fallback valueForKey:@"needsReloadOnActivation"] boolValue];
         BOOL referencePreserved=[WPSelectedPetDirectory() isEqual:directory.path];
         BOOL restored=[fm moveItemAtPath:paused toPath:json error:nil];
         [fallback setAnimationActive:NO];[fallback setAnimationActive:YES];
@@ -87,7 +94,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
 @implementation WPSinglePreviewHome
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Zhour 测试";
+    self.title = [WPEditionName() stringByAppendingString:@" 测试"];
     self.view.backgroundColor = UIColor.systemBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"桌宠设置" style:UIBarButtonItemStylePlain target:self action:@selector(settings)];
 }
@@ -115,11 +122,11 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     NSData *data = [NSData dataWithContentsOfFile:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]];
     NSDictionary *metadata = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     NSString *name = metadata[@"displayName"] ?: metadata[@"name"];
-    checks[@"luluMetadataPresent"] = @([name containsString:@"噜噜"]);
+    checks[@"luluMetadataPresent"] = @([name containsString:WPEditionDefaultPetName()]);
     WPPreviewSetAtlasLoadingSynchronous(YES);
     WPPetRenderer *renderer = [[WPPetRenderer alloc] initWithFrame:CGRectMake(0, 0, 120, 130)];
     CALayer *sprite = [renderer valueForKey:@"spriteLayer"];
-    checks[@"luluLoadsAsSelectedDefault"] = @([renderer.petName containsString:@"噜噜"] && [[WPPreferences() dictionaryForKey:@"selectedPetLastLoad"][@"loadedDirectoryName"] isEqualToString:@"DefaultPet"]);
+    checks[@"luluLoadsAsSelectedDefault"] = @([renderer.petName containsString:WPEditionDefaultPetName()] && [[WPPreferences() dictionaryForKey:@"selectedPetLastLoad"][@"loadedDirectoryName"] isEqualToString:WPDefaultPetDirectory().lastPathComponent]);
     checks[@"luluSpriteHasPixels"] = @(sprite.contents != nil && ((UIImage *)[renderer valueForKey:@"atlas"]).CGImage != NULL);
     checks[@"luluCanMove"] = @([renderer playSemanticAction:@"walkLeft"]);
     id oldLong = [WPPreferences() objectForKey:@"longPressAction"];
@@ -163,7 +170,7 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     home.view.frame = self.window.bounds; [home.view setNeedsLayout]; [home.view layoutIfNeeded];
     checks[@"telegramEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPHomeTelegramGroup"));
     checks[@"versionDiagnosticsSectionAbsent"] = @(home && !WPContainsText(home.view, @"版本与诊断") && !WPContainsText(home.view, @"导出适配诊断"));
-    checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, @"Zhour"));
+    checks[@"personalNameVisible"] = @(home && WPContainsText(home.view, WP_EDITION_ARIA ? @"Aria专属版" : WPEditionName()));
     checks[@"introductionEntryVisible"] = @(home && WPFindIdentifiedView(home.view, @"WPPluginIntroduction"));
     UIViewController *intro=[NSClassFromString(@"WPPluginIntroductionController") new];
     intro.view.frame=self.window.bounds; [intro.view setNeedsLayout]; [intro.view layoutIfNeeded];
@@ -183,6 +190,9 @@ static NSDictionary *WPPetRetentionPreviewChecks(void) {
     [checks addEntriesFromDictionary:WPAdvisorContextPreviewChecks()];
     [checks addEntriesFromDictionary:WPAdvisorOverlayPreviewChecks()];
     [checks addEntriesFromDictionary:WPChoiceSheetPreviewChecks()];
+#if WP_EDITION_COUPLE
+    [checks addEntriesFromDictionary:WPCoupleEditionPreviewChecks(self.window.bounds)];
+#endif
     WPAdvisorDelayedReplyChecks(^(NSDictionary<NSString *,NSNumber *> *delayedChecks){
     [checks addEntriesFromDictionary:delayedChecks];
     WPAdvisorIncomingHookChecks(^(NSDictionary<NSString *,NSNumber *> *hookChecks){
