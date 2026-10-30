@@ -273,6 +273,14 @@ static UIImage *WPQCDecodeAvatar(NSData *data, NSUInteger maximumPixels) {
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(resumeAvatarWork:) name:UIApplicationWillEnterForegroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(settingsChanged:) name:WPSettingsDidChangeNotification object:nil];
     UILongPressGestureRecognizer *hold=[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(holdAvatar:)];hold.minimumPressDuration=.4;[self.table addGestureRecognizer:hold];
+    UITapGestureRecognizer *single=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapAvatar:)];
+    UITapGestureRecognizer *doubleTap=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(doubleTapAvatar:)];doubleTap.numberOfTapsRequired=2;
+    // Delay ending touches so UITableView cannot open the row on tap one of a
+    // double tap. Scroll/pan and long press still take precedence.
+    single.delaysTouchesEnded=YES;doubleTap.delaysTouchesEnded=YES;
+    [single requireGestureRecognizerToFail:doubleTap];[single requireGestureRecognizerToFail:hold];[doubleTap requireGestureRecognizerToFail:hold];
+    [single requireGestureRecognizerToFail:self.table.panGestureRecognizer];[doubleTap requireGestureRecognizerToFail:self.table.panGestureRecognizer];
+    [self.table addGestureRecognizer:single];[self.table addGestureRecognizer:doubleTap];
     return self;
 }
 - (void)dealloc {[NSNotificationCenter.defaultCenter removeObserver:self];[self.avatarRefreshTimer invalidate];for(WPQCAvatarDownload *download in self.avatarDownloads.allValues)[download cancel];for(WPSharedChatAvatarRequest *job in self.avatarPreparations.allValues)[job cancel];}
@@ -445,6 +453,15 @@ static UIImage *WPQCDecodeAvatar(NSData *data, NSUInteger maximumPixels) {
 - (void)updateVisibleAvatar:(UIImage *)image username:(NSString *)username{
     for(WPQuickChatCell *cell in self.table.visibleCells)if([cell.representedUsername isEqual:username]){cell.avatar.image=image;cell.hasPreparedAvatar=YES;}
 }
+- (void)performAvatarTap:(UITapGestureRecognizer *)gesture option:(NSString *)option {
+    if(gesture.state!=UIGestureRecognizerStateRecognized)return;
+    NSIndexPath *path=[self.table indexPathForRowAtPoint:[gesture locationInView:self.table]];
+    if(!path || path.row<0 || path.row>=(NSInteger)self.sessions.count)return;
+    NSString *username=self.sessions[path.row].username;
+    if(self.onSelectWithMode)self.onSelectWithMode(username,(NSInteger)WPQuickChatOptionNumber(option));else if(self.onSelect)self.onSelect(username);
+}
+- (void)tapAvatar:(UITapGestureRecognizer *)gesture {[self performAvatarTap:gesture option:@"tapMode"];}
+- (void)doubleTapAvatar:(UITapGestureRecognizer *)gesture {[self performAvatarTap:gesture option:@"doubleTapMode"];}
 - (void)holdAvatar:(UILongPressGestureRecognizer *)gesture{
     if(gesture.state!=UIGestureRecognizerStateBegan)return;
     NSIndexPath *path=[self.table indexPathForRowAtPoint:[gesture locationInView:self.table]];

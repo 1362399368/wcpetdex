@@ -2,6 +2,7 @@
 #import "WPWeChatSettingsEntry.h"
 #import "WPSettings.h"
 #import "WPCommon.h"
+#import "WPEdition.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -99,13 +100,14 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     NSUInteger successful=manager.calls;
     for(NSUInteger i=0;i<100;i++)WPPreviewRegisterCollectorClass(good);
     r[@"collectorRepeatedInstallRegistersOnlyOnce"]=@(manager.calls==successful);
-    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:@"周游专属包"]&&manager.version.length>0&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
+    r[@"collectorReceivesTitleVersionAndClassString"]=@([manager.title isEqual:@"Zhour"]&&[manager.version isEqual:WPPluginVersion()]&&[manager.controller isEqual:WPPreviewCollectorControllerName()]&&[NSClassFromString(manager.controller) isSubclassOfClass:UIViewController.class]);
     WPCollectorTestManager *replacement=[WPCollectorTestManager new];sWPCollectorTestSingleton=replacement;
     r[@"collectorReplacementSingletonRegistersOnce"]=@(WPPreviewRegisterCollectorClass(good)&&replacement.calls==1);
 
     Class wrapperClass=NSClassFromString(WPPreviewCollectorControllerName());
     UIViewController *parent=[UIViewController new],*wrapper=[wrapperClass new];
     UINavigationController *outer=[[UINavigationController alloc] initWithRootViewController:parent];
+    UIWindow *previous=UIApplication.sharedApplication.keyWindow;UIWindow *testWindow=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,390,844)];testWindow.rootViewController=outer;[testWindow makeKeyAndVisible];
     [outer pushViewController:wrapper animated:NO];[wrapper loadViewIfNeeded];
     UINavigationController *inner=[wrapper valueForKey:@"settingsNavigation"];
     WPSettingsController *settings=(id)inner.viewControllers.firstObject;
@@ -123,6 +125,15 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     [wrapper viewWillDisappear:NO];
     r[@"collectorRestoresOuterNavigationBar"]=@(hidden&&!outer.navigationBarHidden);
 
+    UIViewController *freshWrapper=[wrapperClass new];UINavigationController *freshOuter=[[UINavigationController alloc] initWithRootViewController:[UIViewController new]];
+    testWindow.rootViewController=freshOuter;[freshOuter pushViewController:freshWrapper animated:NO];[freshWrapper loadViewIfNeeded];[freshWrapper viewWillAppear:NO];
+    UINavigationController *freshInner=[freshWrapper valueForKey:@"settingsNavigation"];
+    BOOL rootPop=freshOuter.interactivePopGestureRecognizer.enabled;
+    [freshInner pushViewController:[UIViewController new] animated:NO];
+    BOOL nestedPop=!freshOuter.interactivePopGestureRecognizer.enabled && freshInner.interactivePopGestureRecognizer.enabled;
+    [freshInner popViewControllerAnimated:NO];
+    r[@"collectorChildBackStaysInsidePlugin"]=@(rootPop && nestedPop && freshOuter.interactivePopGestureRecognizer.enabled && freshOuter.topViewController==freshWrapper);
+    testWindow.hidden=YES;testWindow.rootViewController=nil;if(previous && !previous.hidden)[previous makeKeyWindow];
     WPPreviewResetCollectorRegistration();sWPCollectorTestSingleton=nil;
     WPCollectorNativeMocks();
     id native=[NSClassFromString(@"NewSettingViewController") new];
@@ -133,26 +144,31 @@ NSDictionary<NSString *,NSNumber *> *WPCollectorPreviewChecks(void){
     r[@"collectorNativeFallbackKeepsOriginalReload"]=@(sWPCollectorOriginalReloads==1&&table.sections.count==1);
     ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
     r[@"collectorNativeFallbackDoesNotDuplicate"]=@(sWPCollectorOriginalReloads==2&&table.sections.count==1);
+    WPCollectorTestSection *visibleSection=table.sections.firstObject;
+    NSDictionary *visibleCell=visibleSection.cells.firstObject;
+    r[@"collectorNativeEntryHasCorrectTitleAndAction"]=@([visibleCell[@"title"] isEqual:@"Zhour"]&&[visibleCell[@"action"] isEqual:@"wp_zhouyouOpenSettings"]&&visibleCell[@"target"]==native);
     // Publish the actual standard class only now, emulating a later-loaded tweak.
     WPCollectorTestClass(@"WCPluginsMgr",(IMP)WPCollectorTestShared,"@16@0:8");
     WPCollectorTestManager *late=[WPCollectorTestManager new];sWPCollectorTestSingleton=late;
     WPInstallWeChatSettingsEntry();
     ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
-    r[@"collectorLateLoadMovesRowAndPreservesReload"]=@(late.calls==1&&table.sections.count==0&&sWPCollectorOriginalReloads==3);
+    r[@"collectorSuppressesNativeEntryAfterLateLoad"]=@(late.calls==1&&table.sections.count==0&&sWPCollectorOriginalReloads==3);
+    ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
+    r[@"collectorKeepsNativeEntryHiddenOnReload"]=@(late.calls==1&&table.sections.count==0&&sWPCollectorOriginalReloads==4);
     for(NSUInteger i=0;i<10;i++)WPInstallWeChatSettingsEntry();
     r[@"collectorActiveRetriesDoNotDuplicateRegistration"]=@(late.calls==1);
     late=nil;sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();
     ((void(*)(id,SEL))objc_msgSend)(native,@selector(reloadTableData));
-    r[@"collectorUnavailableAgainRestoresNativeEntry"]=@(table.sections.count==1&&sWPCollectorOriginalReloads==4);
+    r[@"collectorUnavailableAgainRestoresNativeEntry"]=@(table.sections.count==1&&sWPCollectorOriginalReloads==5);
     WPCollectorTestClass(@"WCRefinePluginHubManager",(IMP)WPRefineTestShared,"@16@0:8");
     WPCollectorTestManager *refine=[WPCollectorTestManager new],*standard=[WPCollectorTestManager new];
     sWPRefineTestSingleton=refine;sWPCollectorTestSingleton=standard;WPPreviewResetCollectorRegistration();
     WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineOwnHubHasPriority"]=@(refine.calls==1&&standard.calls==0&&[refine.title isEqual:@"周游专属包"]);
+    r[@"collectorStandardFacadeHasPriority"]=@(standard.calls==1&&refine.calls==0&&[standard.title isEqual:@"Zhour"]);
     for(NSUInteger i=0;i<10;i++)WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineHubDoesNotDuplicate"]=@(refine.calls==1);
-    sWPRefineTestSingleton=nil;WPPreviewResetCollectorRegistration();WPInstallWeChatSettingsEntry();
-    r[@"collectorWCRefineUnavailableUsesStandardFacade"]=@(standard.calls==1);
-    sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();
+    r[@"collectorStandardFacadeDoesNotDuplicate"]=@(standard.calls==1);
+    sWPCollectorTestSingleton=nil;WPPreviewResetCollectorRegistration();WPInstallWeChatSettingsEntry();
+    r[@"collectorStandardUnavailableUsesRefineFacade"]=@(refine.calls==1);
+    sWPCollectorTestSingleton=nil;sWPRefineTestSingleton=nil;WPPreviewResetCollectorRegistration();
     return r;
 }

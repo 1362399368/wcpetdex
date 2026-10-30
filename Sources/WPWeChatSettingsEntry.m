@@ -2,6 +2,7 @@
 #import "WPOverlay.h"
 #import "WPSettings.h"
 #import "WPEdition.h"
+#import "WPTheme.h"
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -19,20 +20,26 @@ static BOOL sCollectorRegistrationInProgress;
 
 // WCPluginsMgr's published API accepts a controller *class name*. The child
 // navigation keeps our existing panel-close actions scoped to our own root.
-@interface WPZhouyouPluginSettingsController : UIViewController
+@interface WPZhouyouPluginSettingsController : UIViewController <UINavigationControllerDelegate>
 @property(nonatomic,strong) UINavigationController *settingsNavigation;
 @property(nonatomic) BOOL savedNavigationBarHidden;
 @property(nonatomic) BOOL savedNavigationBarState;
+@property(nonatomic) BOOL savedPopEnabled;
+@property(nonatomic) BOOL savedPopState;
 @end
 
 @implementation WPZhouyouPluginSettingsController
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title=@"周游专属包";
+    self.title=@"Zhour";
     WPSettingsController *settings=[WPSettingsController new];
     __weak typeof(self) weakSelf=self;
     settings.onClose=^{ [weakSelf closeSettings]; };
-    self.settingsNavigation=[[UINavigationController alloc] initWithRootViewController:settings];
+    WPAdaptiveNavigationController *child=[[WPAdaptiveNavigationController alloc] initWithRootViewController:settings];
+    child.willPushChild=^{weakSelf.navigationController.interactivePopGestureRecognizer.enabled=NO;};
+    child.didPopWithoutAnimation=^{[weakSelf updateOuterPopGesture];};
+    self.settingsNavigation=child;
+    self.settingsNavigation.delegate=self;
     [self addChildViewController:self.settingsNavigation];
     self.settingsNavigation.view.frame=self.view.bounds;
     self.settingsNavigation.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
@@ -45,12 +52,24 @@ static BOOL sCollectorRegistrationInProgress;
         self.savedNavigationBarHidden=self.navigationController.navigationBarHidden;
         self.savedNavigationBarState=YES;
     }
+    if(self.navigationController && !self.savedPopState){self.savedPopEnabled=self.navigationController.interactivePopGestureRecognizer.enabled;self.savedPopState=YES;}
     [self.navigationController setNavigationBarHidden:YES animated:animated];
+    [self updateOuterPopGesture];
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     if(self.savedNavigationBarState)
         [self.navigationController setNavigationBarHidden:self.savedNavigationBarHidden animated:animated];
+    if(self.savedPopState)self.navigationController.interactivePopGestureRecognizer.enabled=self.savedPopEnabled;
+}
+- (void)updateOuterPopGesture {
+    if(self.savedPopState)self.navigationController.interactivePopGestureRecognizer.enabled=self.settingsNavigation.viewControllers.count<=1 && self.savedPopEnabled;
+}
+- (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    if(navigationController==self.settingsNavigation && viewController!=navigationController.viewControllers.firstObject)self.navigationController.interactivePopGestureRecognizer.enabled=NO;
+}
+- (void)navigationController:(UINavigationController *)navigationController didShowViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    if(navigationController==self.settingsNavigation)[self updateOuterPopGesture];
 }
 - (void)closeSettings {
     [self.view endEditing:YES];
@@ -102,7 +121,7 @@ static BOOL WPRegisterCollectorClass(Class collectorClass) {
         sCollectorRegistrationInProgress=YES;
         @try {
             ((void(*)(id,SEL,id,id,id))objc_msgSend)(manager,registration,
-                @"周游专属包",WPPluginVersion(),WPCollectorControllerName());
+                @"Zhour",WPPluginVersion(),WPCollectorControllerName());
         } @finally {sCollectorRegistrationInProgress=NO;}
         // A void registration returning normally is the published success
         // contract. Class presence or a singleton alone never hides our row.
@@ -118,8 +137,8 @@ static BOOL WPRegisterPluginCollector(void) {
     // Standard API: https://apt.25mao.com/view/116/nohistory . The Refine
     // implementation was also checked in the user's installed binary:
     // sharedInstance @16@0:8, registration v40@0:8@16@24@32.
-    if(WPRegisterCollectorClass(objc_getClass("WCRefinePluginHubManager")))return YES;
-    return WPRegisterCollectorClass(objc_getClass("WCPluginsMgr"));
+    if(WPRegisterCollectorClass(objc_getClass("WCPluginsMgr")))return YES;
+    return WPRegisterCollectorClass(objc_getClass("WCRefinePluginHubManager"));
 }
 
 static id WPObjectIvar(id object, const char *name) {
@@ -222,7 +241,7 @@ static id WPNewCell(Class cellClass, id controller) {
     if (WPMethodMatches(method, 5, '@') && WPArgumentMatches(method, 2, ":") &&
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@")) {
         return ((id (*)(id, SEL, SEL, id, id))objc_msgSend)(cellClass, selector,
-            action, controller, @"周游专属包");
+            action, controller, @"Zhour");
     }
     selector = @selector(normalCellForSel:target:title:accessoryType:);
     method = class_getClassMethod(cellClass, selector);
@@ -230,7 +249,7 @@ static id WPNewCell(Class cellClass, id controller) {
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@") &&
         WPArgumentMatches(method, 5, "qiQI")) {
         return ((id (*)(id, SEL, SEL, id, id, NSInteger))objc_msgSend)(cellClass, selector,
-            action, controller, @"周游专属包", UITableViewCellAccessoryDisclosureIndicator);
+            action, controller, @"Zhour", UITableViewCellAccessoryDisclosureIndicator);
     }
     return nil;
 }
@@ -252,12 +271,35 @@ static id WPNewSection(Class sectionClass, id cell) {
     return section;
 }
 
+// Remove only the section created by this plugin when a collector becomes available.
+static void WPRemoveNativeSettingsSection(id manager,id section) {
+    if(!manager || !section)return;
+    SEL remove=@selector(removeSection:);Method method=class_getInstanceMethod(object_getClass(manager),remove);
+    @try {
+        if(WPMethodMatches(method,3,'v') && WPArgumentMatches(method,2,"@"))
+            ((void(*)(id,SEL,id))objc_msgSend)(manager,remove,section);
+        else for(Class cls=object_getClass(manager);cls;cls=class_getSuperclass(cls)){
+            unsigned int count=0;Ivar *ivars=class_copyIvarList(cls,&count);
+            for(unsigned int i=0;i<count;i++){
+                const char *name=ivar_getName(ivars[i]),*type=ivar_getTypeEncoding(ivars[i]);
+                if(!name || !strstr(name,"ection") || !type || type[0]!='@')continue;
+                id value=object_getIvar(manager,ivars[i]);
+                if([value isKindOfClass:NSMutableArray.class])[(NSMutableArray *)value removeObjectIdenticalTo:section];
+            }
+            free(ivars);
+        }
+    } @catch(__unused NSException *exception) { return; }
+    if(WPSectionInModel(manager,section)==WPSectionPresenceAbsent)
+        objc_setAssociatedObject(manager,kWPSettingsSectionKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static void WPInsertNativeSettingsRow(id controller) {
     if (![NSThread isMainThread]) return;
-    if(WPRegisterPluginCollector())return;
+    BOOL registered=WPRegisterPluginCollector();
     id manager = WPTableManager(controller);
     if (!manager) return;
     id previous = objc_getAssociatedObject(manager, kWPSettingsSectionKey);
+    if(registered){WPRemoveNativeSettingsSection(manager,previous);return;}
     // Unknown layout means we keep the existing row rather than risk duplicates.
     if (previous && WPSectionInModel(manager, previous) != WPSectionPresenceAbsent) return;
 

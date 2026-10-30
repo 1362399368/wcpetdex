@@ -148,16 +148,9 @@ static WPInvalidContractChatLogic *WPInvalidContractChatService;
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController;
 @end
 
-static void WPRestoreContactPreference(NSString *key, id value) {
-    if (value) [WPPreferences() setObject:value forKey:key];
-    else [WPPreferences() removeObjectForKey:key];
-}
-
 NSDictionary *WPContactRunContractTests(void) {
     NSCAssert(NSThread.isMainThread, @"Contact contracts require the main queue");
     NSMutableDictionary<NSString *, NSNumber *> *results = [NSMutableDictionary new];
-    id previousUsername = [WPPreferences() objectForKey:@"partnerUsername"];
-    id previousDisplayName = [WPPreferences() objectForKey:@"partnerDisplayName"];
     UIWindow *routeWindow = nil;
     @try {
         CContactMgr *manager = [CContactMgr sharedManager];
@@ -189,8 +182,10 @@ NSDictionary *WPContactRunContractTests(void) {
         search.searchBar.text = WPFixtureAria;
         [picker updateSearchResultsForSearchController:search];
         results[@"contactsSearchMatchesUsername"] = @([[picker valueForKey:@"filtered"] count] == 1);
+        __block NSString *selectedUsername = nil, *selectedName = nil;
+        picker.selectionHandler = ^(NSString *username, NSString *name) { selectedUsername = username; selectedName = name; };
         [picker tableView:picker.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-        results[@"contactsSelectionPersistsUsernameAndDisplayName"] = @([[WPPreferences() stringForKey:@"partnerUsername"] isEqualToString:WPFixtureAria] && [[WPPartnerContact selectedDisplayName] isEqualToString:@"Aria"]);
+        results[@"contactsSelectionReturnsUsernameAndDisplayName"] = @([selectedUsername isEqualToString:WPFixtureAria] && [selectedName isEqualToString:@"Aria"]);
 
         UIWindowScene *scene = nil;
         for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
@@ -226,8 +221,6 @@ NSDictionary *WPContactRunContractTests(void) {
         routeWindow.rootViewController = nil;
         WPUseInvalidContractChatLogic = NO;
         WPInvalidContractChatService = nil;
-        WPRestoreContactPreference(@"partnerUsername", previousUsername);
-        WPRestoreContactPreference(@"partnerDisplayName", previousDisplayName);
     }
     return [results copy];
 }

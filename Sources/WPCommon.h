@@ -2,6 +2,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSBundle *WPResourceBundle(void);
+FOUNDATION_EXPORT NSString *WPResourceDirectory(void);
 FOUNDATION_EXPORT NSString *WPDefaultPetDirectory(void);
 FOUNDATION_EXPORT NSUserDefaults *WPPreferences(void);
 FOUNDATION_EXPORT NSString *WPDataDirectory(void);

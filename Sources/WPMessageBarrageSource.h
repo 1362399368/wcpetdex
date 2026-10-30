@@ -18,6 +18,9 @@ FOUNDATION_EXPORT BOOL WPMessageBarrageConversationAllowed(NSString *username);
 
 @interface WPMessageBarrageSource : NSObject
 + (instancetype)sharedSource;
+/// Installs only the shared native receive hook for the opt-in advisor mode.
+/// It does not enable the barrage, collect message bodies, or change filters.
+- (void)ensureContinuousReceiveHook;
 @property(nonatomic,readonly) BOOL requiresSessionPolling;
 /// Call from the foreground overlay lifecycle. Off immediately purges pending bodies.
 - (void)setActive:(BOOL)active;

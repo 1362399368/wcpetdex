@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString * const WPChatAdvisorDefaultBaseURL;
 FOUNDATION_EXPORT NSString * const WPChatAdvisorDefaultModel;
 FOUNDATION_EXPORT NSString * const WPChatAdvisorCustomPresetIdentifier;
+FOUNDATION_EXPORT BOOL WPChatAdvisorIsGroupUsername(NSString * _Nullable username);
 
 /// A built-in analysis scene. The instruction steers both the reading and the replies.
 @interface WPChatAdvisorPreset : NSObject
@@ -39,6 +40,11 @@ FOUNDATION_EXPORT NSString * const WPChatAdvisorCustomPresetIdentifier;
 + (nullable instancetype)adviceFromModelContent:(NSString *)content error:(NSString * _Nullable * _Nullable)error;
 @end
 
+/// Cancels the active network request, including any retry. Use on the main thread.
+@interface WPChatAdvisorRequest : NSObject
+- (void)cancel;
+@end
+
 @interface WPChatAdvisor : NSObject
 + (BOOL)isEnabled;
 + (void)setEnabled:(BOOL)enabled;
@@ -71,6 +77,12 @@ FOUNDATION_EXPORT NSString * const WPChatAdvisorCustomPresetIdentifier;
 /// Completion runs on main. Exactly one of advice and error is non-nil.
 + (void)analyzeLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group
           completion:(void (^)(WPChatAdvice * _Nullable advice, NSString * _Nullable error))completion;
++ (WPChatAdvisorRequest *)startAnalysisOfLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group
+                                   completion:(void (^)(WPChatAdvice * _Nullable advice, NSString * _Nullable error))completion;
+/// Uses the scene and instruction captured when the task was submitted.
++ (WPChatAdvisorRequest *)startAnalysisOfLines:(NSArray<WPChatLine *> *)lines group:(BOOL)group
+                                       preset:(WPChatAdvisorPreset *)preset customInstruction:(NSString *)custom
+                                   completion:(void (^)(WPChatAdvice * _Nullable advice, NSString * _Nullable error))completion;
 + (void)testConnection:(void (^)(BOOL success, NSString *message))completion;
 + (void)fetchModels:(void (^)(NSArray<NSString *> * _Nullable models, NSString * _Nullable error))completion;
 /// Replaces the native input text without sending. NO means nothing was written.

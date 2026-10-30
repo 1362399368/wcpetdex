@@ -14,18 +14,5 @@
 - (void)showMessage:(NSString *)text;
 - (void)closePanel;
 - (void)openSettings;
-- (void)openInteractions;
-/// Sends through the pair client; a miss replies to the pending snapshot taken now.
-- (void)sendInteraction:(NSString *)kind completion:(void (^)(BOOL accepted, NSString *message))completion;
-/// Text for the connection pill in settings.
-- (NSString *)connectionStatus;
 - (void)previewMenuRadius;
-- (BOOL)configureCoupleURL:(NSURL *)url token:(NSString *)token;
-- (BOOL)hasSavedCoupleToken;
-/// Personal edition only; Aria's edition does not surface peer status.
-- (NSString *)peerStatusText;
-- (BOOL)peerIsOnline;
-- (NSString *)stealthStatusText;
-- (BOOL)stealthEnabled;
-- (void)setStealthEnabled:(BOOL)enabled;
 @end

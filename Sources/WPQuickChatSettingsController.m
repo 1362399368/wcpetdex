@@ -2,8 +2,27 @@
 #import "WPQuickChatPreferences.h"
 #import "WPQuickChat.h"
 #import "WPCommon.h"
-#import "WPTapActions.h"
 #import "WPBarragePreferences.h"
+
+void WPAddQuickChatGestureRows(WPCardPageController *page,UIStackView *card) {
+    UIView *tap=[page segmentedRowWithTitle:@"单击侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"tapMode") handler:^(NSInteger value){WPQuickChatSetOption(@"tapMode",@(value));}];
+    tap.accessibilityIdentifier=@"WPQuickChatAvatarTapAction";[card addArrangedSubview:tap];
+    UIView *doubleTap=[page segmentedRowWithTitle:@"双击侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"doubleTapMode") handler:^(NSInteger value){WPQuickChatSetOption(@"doubleTapMode",@(value));}];
+    doubleTap.accessibilityIdentifier=@"WPQuickChatAvatarDoubleTapAction";[card addArrangedSubview:doubleTap];
+    UIView *hold=[page segmentedRowWithTitle:@"长按侧栏头像" items:@[@"小窗",@"全屏",@"菜单"] selected:(NSInteger)WPQuickChatOptionNumber(@"holdMode") handler:^(NSInteger value){WPQuickChatSetOption(@"holdMode",@(value));}];
+    hold.accessibilityIdentifier=@"WPQuickChatAvatarHoldAction";[card addArrangedSubview:hold];
+    if(!WPBarrageEnabled()){
+        UIView *arrival=[page switchRowWithTitle:@"点临时提示头像进入会话" detail:@"只影响关闭弹幕时的新消息临时头像" on:WPQuickChatOptionBool(@"arrivalTap") handler:^(BOOL on){WPQuickChatSetOption(@"arrivalTap",@(on));}];
+        arrival.accessibilityIdentifier=@"WPQuickChatArrivalAvatarTap";[card addArrangedSubview:arrival];
+        UIView *mode=[page segmentedRowWithTitle:@"临时提示头像打开方式" items:@[@"小窗",@"全屏"] selected:(NSInteger)WPQuickChatOptionNumber(@"openMode") handler:^(NSInteger value){WPQuickChatSetOption(@"openMode",@(value));}];
+        mode.accessibilityIdentifier=@"WPQuickChatArrivalAvatarMode";[card addArrangedSubview:mode];
+    }
+}
+
+void WPAddQuickChatGestureSettings(WPCardPageController *page) {
+    [page addSectionTitle:@"聊天头像操作"];
+    WPAddQuickChatGestureRows(page,[page addCard]);
+}
 
 @interface WPQuickChatSettingsController () <UIColorPickerViewControllerDelegate>
 @end
@@ -25,29 +44,16 @@
     __weak typeof(self) weakSelf=self;
     NSString *(^pixels)(float)=^NSString *(float value){return [NSString stringWithFormat:@"%.0f",value];};
     NSString *(^percent)(float)=^NSString *(float value){return [NSString stringWithFormat:@"%.0f%%",value*100];};
-    UIStackView *main=[self addCard];
-    [main addArrangedSubview:[self switchRowWithTitle:@"启用快捷聊天" detail:@"单击或双击桌宠打开最近会话侧栏" on:WPQuickChatEnabled() handler:^(BOOL on){
-        [WPPreferences() setBool:on forKey:@"quickChatEnabled"];if(on)WPSetConfiguredTapAction(NO,WPTapActionQuickChat);
-        else WPResetQuickChatTapActions();[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];[weakSelf reloadCards];
-    }]];
-    [main addArrangedSubview:[self toggle:@"贴边时直接执行点击动作" key:@"edgeTapActions" detail:@"开启后，收起的桌宠单击、双击也直接执行已设置动作；关闭时先展开桌宠"]];
-    [self addSectionTitle:@"桌宠与消息提示"];
+    [self addSectionTitle:@"消息提示"];
     UIStackView *pet=[self addCard];
-    UIView *size=[self sliderRowWithTitle:@"桌宠大小" value:[WPPreferences() doubleForKey:@"petSize"] minimum:48 maximum:160 format:pixels handler:^(float value){[WPPreferences() setDouble:value forKey:@"petSize"];[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];}];
-    for(UIView *view in size.subviews)if([view isKindOfClass:UISlider.class])((UISlider *)view).continuous=NO;[pet addArrangedSubview:size];
-    UIView *alpha=[self sliderRowWithTitle:@"桌宠透明度" value:[WPPreferences() doubleForKey:@"petOpacity"] minimum:.25 maximum:1 format:percent handler:^(float value){[WPPreferences() setDouble:value forKey:@"petOpacity"];[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];}];
-    for(UIView *view in alpha.subviews)if([view isKindOfClass:UISlider.class])((UISlider *)view).continuous=NO;[pet addArrangedSubview:alpha];
     [pet addArrangedSubview:[self toggle:@"截图与录屏隐藏" key:@"hideCapture" detail:@"保护桌宠与快捷聊天；开启后请在本机截图确认效果"]];
     if(!WPBarrageEnabled()){
     [pet addArrangedSubview:[self toggle:@"新消息头像提示" key:@"arrivalAvatar" detail:@"新消息到达时在桌宠附近短暂显示发送方头像"]];
     [pet addArrangedSubview:[self slider:@"提示头像显示时长" key:@"arrivalDuration" minimum:1 maximum:15 format:^NSString *(float value){return [NSString stringWithFormat:@"%.0f 秒",value];}]];
-    [pet addArrangedSubview:[self toggle:@"点提示头像进入会话" key:@"arrivalTap" detail:@"仅在无弹幕的临时提示头像中生效"]];
-    [pet addArrangedSubview:[self choice:@"提示头像打开方式" key:@"openMode" items:@[@"小窗",@"全屏"]]];
     }
-    [pet addArrangedSubview:[self toggle:@"桌宠显示会话角标" key:@"buttonBadge" detail:@"在桌宠附近显示未读会话数量，和双人互动红点独立"]];
-    [pet addArrangedSubview:[self switchRowWithTitle:@"贴边自动收起" detail:@"沿用桌宠的自动探头设置，闲置约 3 秒后收起" on:[WPPreferences() boolForKey:@"autoPeek"] handler:^(BOOL on){[WPPreferences() setBool:on forKey:@"autoPeek"];[NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];}]];
+    [pet addArrangedSubview:[self toggle:@"桌宠显示会话角标" key:@"buttonBadge" detail:@"在桌宠附近显示未读会话数量"]];
 
-    [self addNote:WPBarrageEnabled()?@"当前开启聊天弹幕：头顶头像由弹幕与最新未读消息统一管理，结束动画在弹幕设置中选择。点击头顶头像打开可调聊天窗口，首次为 75%，以后沿用上次高度。":@"临时提示头像的时长与打开方式只影响新消息到达时的短暂提示；桌宠顶部未读头像打开可调聊天窗口，首次为 75%，以后沿用上次高度。"];
+    [self addNote:WPBarrageEnabled()?@"当前开启聊天弹幕：头顶头像由弹幕与最新未读消息统一管理，结束动画可在弹幕设置中选择。":@"临时提示头像的时长只影响新消息到达时的短暂提示；头像点击方式可在快捷设置中调整。"];
     [self addSectionTitle:@"侧栏外观"];
     UIStackView *appearance=[self addCard];
     [appearance addArrangedSubview:[self rowWithTitle:@"侧栏位置" detail:@"桌宠在左侧贴边隐藏或固定时显示在右侧，其余情况显示在左侧" actionTitle:@"自动" handler:nil]];
@@ -68,8 +74,6 @@
     UIStackView *display=[self addCard];
     [display addArrangedSubview:[self choice:@"会话模式" key:@"customMode" items:@[@"跟随微信",@"自定义"]]];
     [display addArrangedSubview:[self choice:@"过滤规则" key:@"filter" items:@[@"全部",@"好友",@"群聊"]]];
-    [display addArrangedSubview:[self choice:@"单击头像" key:@"tapMode" items:@[@"小窗",@"全屏",@"菜单"]]];
-    [display addArrangedSubview:[self choice:@"长按头像" key:@"holdMode" items:@[@"小窗",@"全屏",@"菜单"]]];
     [display addArrangedSubview:[self toggle:@"好友与群聊分开显示" key:@"separate" detail:nil]];
     [display addArrangedSubview:[self toggle:@"未读会话在前" key:@"unreadFirst" detail:nil]];
     [display addArrangedSubview:[self toggle:@"置顶会话常显" key:@"pinnedAlways" detail:@"限制会话数量时继续保留置顶会话"]];

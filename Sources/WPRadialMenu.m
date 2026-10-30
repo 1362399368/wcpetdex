@@ -1,8 +1,9 @@
 #import "WPRadialMenu.h"
 #import "WPCommon.h"
 #import "WPMenuIcons.h"
-#import "WPEdition.h"
-#import "WPChatAdvisor.h"
+#import "WPMenuConfiguration.h"
+#import "WPSharedChatAvatar.h"
+#import "WPPartnerContact.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 #import <float.h>
@@ -12,21 +13,23 @@
 @property (nonatomic, copy) NSString *actionExplanation;
 @property (nonatomic, strong) UIImageView *symbolView;
 @property (nonatomic) BOOL menuSelected;
+@property (nonatomic,strong) WPSharedChatAvatarRequest *avatarRequest;
+@property (nonatomic,copy) NSString *representedUsername;
 @property (nonatomic, readonly) BOOL sendDisabled;
 - (instancetype)initWithAction:(NSString *)action title:(NSString *)title symbol:(NSString *)symbol;
 - (void)setMenuSelected:(BOOL)selected;
 @end
 
 @implementation WPMenuActionButton
-- (BOOL)sendDisabled{return WPCanUsePrivateFeatures() && [WPPreferences() boolForKey:@"stealthEnabled"] && [@[@"miss",@"anger"] containsObject:self.actionIdentifier];}
+- (BOOL)sendDisabled{return NO;}
 
 - (instancetype)initWithAction:(NSString *)action title:(NSString *)title symbol:(NSString *)symbol {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _actionIdentifier = [action copy];
-    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"miss":@"松手告诉对方「想你了」", @"anger":@"松手告诉对方「生气了」", @"read":@"松手将所有会话标为已读", @"advisor":@"松手分析当前聊天"}[action] ?: title;
+    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手选择聊天场景", @"advisorDirect":@"松手使用固定预设分析", @"advisorHistory":@"松手打开参谋记录", @"contact1":@"松手打开快捷联系人 1", @"contact2":@"松手打开快捷联系人 2", @"contact3":@"松手打开快捷联系人 3"}[action] ?: title;
     self.accessibilityLabel = title;
-    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"miss":@"向对方发送想你了互动", @"anger":@"向对方发送生气了互动", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
+    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"quickChat":@"打开快捷聊天", @"settings":@"打开桌宠设置", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
     self.isAccessibilityElement = YES;
     self.backgroundColor = UIColor.clearColor;
@@ -37,8 +40,8 @@
     UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:23 weight:UIImageSymbolWeightSemibold];
     _symbolView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbol withConfiguration:configuration]];
     if([action isEqualToString:@"moments"])_symbolView.image=WPMomentsMenuIcon();
-    if([action isEqualToString:@"anger"])_symbolView.image=WPBrokenHeartMenuIcon();
-    _symbolView.tintColor = [action isEqualToString:@"miss"] ? UIColor.systemPinkColor : ([action isEqualToString:@"anger"] ? UIColor.systemGrayColor : UIColor.labelColor);
+    if([action isEqualToString:@"advisor"])_symbolView.image=WPAdvisorMenuIcon();
+    _symbolView.tintColor = UIColor.labelColor;
     _symbolView.contentMode = UIViewContentModeScaleAspectFit;
     _symbolView.userInteractionEnabled = NO;
     _symbolView.isAccessibilityElement = NO;
@@ -52,6 +55,7 @@
     CGFloat width = CGRectGetWidth(self.bounds), height = CGRectGetHeight(self.bounds);
     CGFloat iconSize = fmin(34, fmin(width, height) - 12);
     _symbolView.frame = CGRectMake((width - iconSize) / 2, (height - iconSize) / 2, iconSize, iconSize);
+    if(_symbolView.clipsToBounds)_symbolView.layer.cornerRadius=iconSize/2;
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -64,7 +68,7 @@
     _menuSelected = selected;
     self.backgroundColor = UIColor.clearColor;
     self.layer.borderWidth = 0;
-    _symbolView.tintColor = self.sendDisabled ? UIColor.blackColor : ([self.actionIdentifier isEqualToString:@"miss"] ? UIColor.systemPinkColor : ([self.actionIdentifier isEqualToString:@"anger"] ? UIColor.systemGrayColor : (selected ? UIColor.systemBlueColor : UIColor.labelColor)));
+    _symbolView.tintColor = selected ? UIColor.systemBlueColor : UIColor.labelColor;
     _symbolView.transform = selected ? CGAffineTransformMakeScale(1.18, 1.18) : CGAffineTransformIdentity;
     self.accessibilityTraits = UIAccessibilityTraitButton | (selected ? UIAccessibilityTraitSelected : 0) | (self.sendDisabled ? UIAccessibilityTraitNotEnabled : 0);
 }
@@ -99,10 +103,15 @@
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _allButtons = @[
         [[WPMenuActionButton alloc] initWithAction:@"moments" title:@"朋友圈" symbol:@"camera.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"miss" title:@"想你了" symbol:@"heart.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"anger" title:@"生气了" symbol:@"heart.slash.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"quickChat" title:@"快捷聊天" symbol:@"bubble.left.and.bubble.right.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"settings" title:@"设置" symbol:@"gearshape.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"read" title:@"全部已读" symbol:@"checkmark.circle.fill"],
-        [[WPMenuActionButton alloc] initWithAction:@"advisor" title:@"参谋" symbol:@"sparkles"]
+        [[WPMenuActionButton alloc] initWithAction:@"advisor" title:@"参谋聊天" symbol:@"sparkles"],
+        [[WPMenuActionButton alloc] initWithAction:@"advisorDirect" title:@"直接参谋" symbol:@"bolt.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"advisorHistory" title:@"参谋记录" symbol:@"clock.arrow.circlepath"],
+        [[WPMenuActionButton alloc] initWithAction:@"contact1" title:@"快捷联系人 1" symbol:@"person.circle"],
+        [[WPMenuActionButton alloc] initWithAction:@"contact2" title:@"快捷联系人 2" symbol:@"person.circle"],
+        [[WPMenuActionButton alloc] initWithAction:@"contact3" title:@"快捷联系人 3" symbol:@"person.circle"]
     ];
     for (WPMenuActionButton *button in _allButtons) {
         [button addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -126,7 +135,7 @@ static CGFloat WPClamp(CGFloat value, CGFloat minimum, CGFloat maximum) {
     return fmax(minimum, fmin(maximum, value));
 }
 
-#define WP_MENU_MAX_ITEMS 5
+#define WP_MENU_MAX_ITEMS 10
 typedef struct {
     CGPoint centers[WP_MENU_MAX_ITEMS];
     NSUInteger count;
@@ -163,7 +172,7 @@ static CGFloat WPFanMaximumRadius(CGPoint anchor, CGRect centers, CGFloat shiftL
 
 static WPFanLayout WPComputeFanLayout(CGPoint anchor, CGRect safe, CGFloat scale, NSInteger side, NSUInteger count) {
     WPFanLayout result = {0};
-    count = (NSUInteger)WPClamp(count, 2, WP_MENU_MAX_ITEMS);
+    count = (NSUInteger)WPClamp(count, 1, WP_MENU_MAX_ITEMS);
     result.count = count;
     result.requestedRadius = 80 * WPClamp(isfinite(scale) ? scale : 1, .6, 4);
     if (CGRectIsEmpty(safe) || !isfinite(anchor.x) || !isfinite(anchor.y)) return result;
@@ -171,6 +180,19 @@ static WPFanLayout WPComputeFanLayout(CGPoint anchor, CGRect safe, CGFloat scale
     // picked from competing layouts. The side has a small center hysteresis.
     CGFloat verticalBias = WPClamp((CGRectGetMidY(safe) - anchor.y) / fmax(1, CGRectGetHeight(safe) / 2), -1, 1);
     result.direction = side > 0 ? verticalBias * M_PI_4 : M_PI - verticalBias * M_PI_4;
+    // A user may keep just one action. Center its touch target inside the
+    // safe area rather than dividing by (count - 1) for the usual fan.
+    if(count==1){
+        CGFloat target=CGRectGetWidth(safe)>=52 && CGRectGetHeight(safe)>=52?52:44;
+        if(CGRectGetWidth(safe)<target || CGRectGetHeight(safe)<target)return result;
+        CGRect centers=CGRectInset(safe,target/2,target/2);
+        CGFloat x=WPClamp(anchor.x+cos(result.direction)*result.requestedRadius,CGRectGetMinX(centers),CGRectGetMaxX(centers));
+        CGFloat y=WPClamp(anchor.y+sin(result.direction)*result.requestedRadius,CGRectGetMinY(centers),CGRectGetMaxY(centers));
+        result.origin=anchor;result.centers[0]=CGPointMake(x,y);result.targetSize=target;
+        result.effectiveRadius=hypot(x-anchor.x,y-anchor.y);
+        result.limited=fabs(result.effectiveRadius-result.requestedRadius)>.05;
+        result.fan=result.valid=YES;return result;
+    }
     // Items share one half circle facing inward; the fifth item narrows the
     // spacing, and the radius minimum below grows to keep targets apart.
     CGPoint unit[WP_MENU_MAX_ITEMS];
@@ -257,24 +279,46 @@ static WPFanLayout WPComputeFanLayout(CGPoint anchor, CGRect safe, CGFloat scale
 
 - (void)updateActionButtons {
     NSMutableArray *visible=[NSMutableArray new];
-    // The advisor item appears only after a key is saved and the switch is on.
-    BOOL advisor=WPChatAdvisor.isReady;
-    for(WPMenuActionButton *button in _allButtons){
-        BOOL show=advisor || ![button.actionIdentifier isEqualToString:@"advisor"];
-        button.hidden=!show;
-        if(show)[visible addObject:button];
+    for(WPMenuActionButton *button in _allButtons)button.hidden=YES;
+    for(NSString *identifier in WPMenuEnabledActions())for(WPMenuActionButton *button in _allButtons){
+        if([button.actionIdentifier isEqualToString:identifier]){button.hidden=NO;[visible addObject:button];break;}
     }
     _actionButtons = visible;
     self.accessibilityElements = _actionButtons;
+}
+
+- (void)prepareContactAvatars {
+    for(WPMenuActionButton *button in _actionButtons){
+        if(![@[@"contact1",@"contact2",@"contact3"] containsObject:button.actionIdentifier])continue;
+        [button.avatarRequest cancel];button.avatarRequest=nil;
+        NSString *username=WPMenuContactUsername(button.actionIdentifier);button.representedUsername=username;
+        button.symbolView.image=[UIImage systemImageNamed:@"person.circle"];
+        button.symbolView.clipsToBounds=NO;button.symbolView.contentMode=UIViewContentModeScaleAspectFit;
+        NSString *displayName=username.length?[WPPartnerContact displayNameForUsername:username]:nil;
+        button.actionExplanation=username.length?(displayName.length?[NSString stringWithFormat:@"松手打开%@的聊天",displayName]:@"松手打开联系人聊天"):@"请先在长按菜单设置中选择联系人";
+        button.accessibilityLabel=username.length?(displayName.length?displayName:WPMenuActionTitle(button.actionIdentifier)):WPMenuActionTitle(button.actionIdentifier);
+        if(!username.length)continue;
+        UIImage *cached=WPCachedSharedChatAvatar(username);
+        if(cached){button.symbolView.image=cached;button.symbolView.clipsToBounds=YES;button.symbolView.contentMode=UIViewContentModeScaleAspectFill;[button setNeedsLayout];continue;}
+        __weak typeof(self) weakSelf=self;__weak WPMenuActionButton *weakButton=button;
+        button.avatarRequest=WPRequestSharedChatAvatar(username,^(UIImage *avatar){
+            WPRadialMenuView *menu=weakSelf;WPMenuActionButton *current=weakButton;
+            if(!menu.isShowing || !current || ![current.representedUsername isEqualToString:username])return;
+            current.avatarRequest=nil;if(!avatar)return;
+            current.symbolView.image=avatar;current.symbolView.clipsToBounds=YES;current.symbolView.contentMode=UIViewContentModeScaleAspectFill;[current setNeedsLayout];
+        });
+    }
 }
 
 - (void)showAroundPoint:(CGPoint)point inBounds:(CGRect)bounds {
     NSAssert(NSThread.isMainThread, @"Pet menus must run on the main thread");
     [self cancel];
     [self updateActionButtons];
+    if(!_actionButtons.count)return;
     _didFire = NO;
     for(WPMenuActionButton *button in _actionButtons)[button setMenuSelected:NO];
     _showing = YES;
+    [self prepareContactAvatars];
     [self layoutAroundPoint:point inBounds:bounds];
     if (!_showing) return;
     self.hidden = NO;
@@ -348,6 +392,13 @@ static WPFanLayout WPComputeFanLayout(CGPoint anchor, CGRect safe, CGFloat scale
 
 - (void)dismiss {
     _showing = NO;
+    for(WPMenuActionButton *button in _allButtons){
+        [button.avatarRequest cancel];button.avatarRequest=nil;button.representedUsername=nil;
+        if([@[@"contact1",@"contact2",@"contact3"] containsObject:button.actionIdentifier]){
+            button.symbolView.image=[UIImage systemImageNamed:@"person.circle"];button.symbolView.clipsToBounds=NO;
+            button.symbolView.contentMode=UIViewContentModeScaleAspectFit;
+        }
+    }
     [_hoveredButton setMenuSelected:NO];
     _hoveredButton = nil;
     self.hintLabel.hidden = YES;

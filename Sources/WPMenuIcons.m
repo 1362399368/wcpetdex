@@ -1,6 +1,30 @@
 #import "WPMenuIcons.h"
 #import <math.h>
 
+static void WPDrawAdvisorSparkle(CGPoint center, CGFloat radius, UIColor *color) {
+    UIBezierPath *path=[UIBezierPath bezierPath];
+    CGFloat inner=radius*.24;
+    for(NSUInteger i=0;i<8;i++){
+        CGFloat angle=-M_PI_2+i*M_PI_4;
+        CGFloat distance=(i%2)?inner:radius;
+        CGPoint point=CGPointMake(center.x+cos(angle)*distance,center.y+sin(angle)*distance);
+        if(i==0)[path moveToPoint:point];else [path addLineToPoint:point];
+    }
+    [path closePath];[color setFill];[path fill];
+}
+
+UIImage *WPAdvisorMenuIcon(void){
+    static UIImage *icon;static dispatch_once_t once;dispatch_once(&once,^{
+        UIGraphicsImageRendererFormat *format=[UIGraphicsImageRendererFormat defaultFormat];format.opaque=NO;format.scale=3;
+        UIGraphicsImageRenderer *renderer=[[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(34,34) format:format];
+        icon=[[renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context){
+            WPDrawAdvisorSparkle(CGPointMake(17,19),13,[UIColor colorWithRed:.50 green:.31 blue:.93 alpha:1]);
+            WPDrawAdvisorSparkle(CGPointMake(6,7),5,[UIColor colorWithRed:.09 green:.69 blue:.78 alpha:1]);
+            WPDrawAdvisorSparkle(CGPointMake(28,7),5,[UIColor colorWithRed:1 green:.53 blue:.19 alpha:1]);
+        }] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    });return icon;
+}
+
 UIImage *WPMomentsMenuIcon(void){
     static UIImage *icon;static dispatch_once_t once;dispatch_once(&once,^{
         UIGraphicsImageRendererFormat *format=[UIGraphicsImageRendererFormat defaultFormat];format.opaque=NO;format.scale=3;

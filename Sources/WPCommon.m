@@ -2,7 +2,6 @@
 #import "WPQuickChat.h"
 #import "WPMessageBarrageSource.h"
 #import "WPActionAdapter.h"
-#import "WPBackendConfiguration.h"
 #import <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -12,14 +11,22 @@
 NSString * const WPSelectedPetDidChangeNotification = @"WeChatPet.SelectedPetDidChange";
 NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange";
 
+extern NSString * _Nullable WPEmbeddedResourceDirectory(void);
+
 NSBundle *WPResourceBundle(void) {
-    NSURL *url = [[NSBundle mainBundle] URLForResource:@"WeChatPet" withExtension:@"bundle"];
-    if (url) return [NSBundle bundleWithURL:url];
+    for (NSString *name in @[@"Zhour", @"SinglePet-zhour", @"zhour-single"]) {
+        NSURL *url = [[NSBundle mainBundle] URLForResource:name withExtension:@"bundle"];
+        if (url) return [NSBundle bundleWithURL:url];
+    }
     Dl_info info;
     if (dladdr((const void *)&WPResourceBundle, &info) && info.dli_fname) {
         NSString *dir = [[NSString stringWithUTF8String:info.dli_fname] stringByDeletingLastPathComponent];
-        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"WeChatPet.bundle"],
-                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"WeChatPet.bundle"]]) {
+        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"Zhour.bundle"],
+                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"Zhour.bundle"],
+                                      [dir stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
+                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
+                                      [dir stringByAppendingPathComponent:@"zhour-single.bundle"],
+                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"zhour-single.bundle"]]) {
             NSBundle *bundle = [NSBundle bundleWithPath:candidate];
             if (bundle) return bundle;
         }
@@ -27,26 +34,28 @@ NSBundle *WPResourceBundle(void) {
     return [NSBundle mainBundle];
 }
 
+NSString *WPResourceDirectory(void) {
+    return WPEmbeddedResourceDirectory() ?: WPResourceBundle().resourcePath;
+}
+
 NSString *WPDefaultPetDirectory(void) {
-    return [WPResourceBundle().resourcePath stringByAppendingPathComponent:(WP_EDITION_ARIA ? @"AriaPet" : @"DefaultPet")];
+    return [WPResourceDirectory() stringByAppendingPathComponent:(WP_EDITION_ARIA ? @"AriaPet" : @"DefaultPet")];
 }
 
 NSUserDefaults *WPPreferences(void) {
     static NSUserDefaults *defaults;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        defaults = [[NSUserDefaults alloc] initWithSuiteName:@"dev.zhour.wechatpet"];
-        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @NO, @"quickChatFlash": @YES,
-            @"unreadAvatarEnabled":@YES,@"unreadAvatarOffsetX":@0,@"unreadAvatarOffsetY":@0,
-            @"interactionBadgeOffsetX":@0,@"interactionBadgeOffsetY":@0} mutableCopy];
-        NSString *backend=WPDefaultCoupleURLString();if(backend.length)registered[@"coupleURL"]=backend;
+        defaults = [[NSUserDefaults alloc] initWithSuiteName:@"dev.zhour.wechatpet.single"];
+        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @YES, @"quickChatFlash": @YES,
+            @"unreadAvatarEnabled":@YES,@"unreadAvatarOffsetX":@0,@"unreadAvatarOffsetY":@0} mutableCopy];
         [defaults registerDefaults:registered];
     });
     return defaults;
 }
 
 NSString *WPDataDirectory(void) {
-    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"WeChatPet"];
+    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"WeChatPetSingle"];
     [[NSFileManager defaultManager] createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
     return path;
 }
@@ -88,7 +97,7 @@ NSString *WPSelectedPetDirectory(void){
     if(parts.count==2 && [parts[1] isEqual:((NSString *)parts[1]).lastPathComponent] && [parts[1] length]){
         if([parts[0] isEqual:@"downloaded"])return [WPDownloadedRoot() stringByAppendingPathComponent:parts[1]];
         if([parts[0] isEqual:@"imported"])return [[WPDataDirectory() stringByAppendingPathComponent:@"ImportedPets"] stringByAppendingPathComponent:parts[1]];
-        if([parts[0] isEqual:@"bundle"] && ([@"DefaultPet" isEqual:parts[1]] || [@"AriaPet" isEqual:parts[1]]))return [WPResourceBundle().resourcePath stringByAppendingPathComponent:parts[1]];
+        if([parts[0] isEqual:@"bundle"] && ([@"DefaultPet" isEqual:parts[1]] || [@"AriaPet" isEqual:parts[1]]))return [WPResourceDirectory() stringByAppendingPathComponent:parts[1]];
     }
     return [WPPreferences() stringForKey:@"selectedPetDirectory"];
 }
@@ -168,7 +177,7 @@ NSDictionary *WPRuntimeDiagnostics(void) {
     NSMutableArray *classNames=[@[@"CContactMgr",@"CMessageMgr",@"MMNewSessionMgr",@"MMMsgLogicManager",@"MMServiceCenter",@"MMContext",@"CAppViewControllerManager",@"CSessionInfo",@"MMSessionInfo",@"MMHeadImageMgr",@"CContact",@"SessionSelectController",@"ContactSelectViewController",@"WCRefineClearUnreadMsgHook"] mutableCopy];
 #ifdef WP_RUNTIME_DIAGNOSTIC_URL
     NSString *selected=WPSelectedPetDirectory();
-    result[@"petResources"]=@{@"bundleFound":@([WPResourceBundle().bundlePath.pathExtension isEqual:@"bundle"]),@"defaultExists":@([[NSFileManager defaultManager] fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]),@"selectedExists":@([[NSFileManager defaultManager] fileExistsAtPath:selected?:@""])};
+    result[@"petResources"]=@{@"resourceDirectoryFound":@([[NSFileManager defaultManager] fileExistsAtPath:WPResourceDirectory()]),@"defaultExists":@([[NSFileManager defaultManager] fileExistsAtPath:[WPDefaultPetDirectory() stringByAppendingPathComponent:@"pet.json"]]),@"selectedExists":@([[NSFileManager defaultManager] fileExistsAtPath:selected?:@""])};
     NSMutableArray *imageChecks=[NSMutableArray new];
     for(NSString *directory in @[selected?:@"",WPDefaultPetDirectory()]){
         for(NSString *file in @[@"spritesheet.png",@"spritesheet.webp",@"pet.png"]){

@@ -61,8 +61,7 @@ static const CGFloat WPCAPPadding=16,WPCAPHeader=46;
 
 - (void)resetContent {
     for(UIView *view in self.stack.arrangedSubviews){[self.stack removeArrangedSubview:view];[view removeFromSuperview];}
-    WPChatAdvisorPreset *preset=WPChatAdvisor.currentPreset;
-    self.titleLabel.text=[NSString stringWithFormat:@"聊天参谋 · %@",preset.title];
+    self.titleLabel.text=self.taskPresetTitle.length?[NSString stringWithFormat:@"聊天参谋 · %@",self.taskPresetTitle]:@"聊天参谋";
 }
 - (UILabel *)addText:(NSString *)text size:(CGFloat)size weight:(UIFontWeight)weight color:(UIColor *)color {
     UILabel *label=WPThemeLabel(text,size,weight,color);label.numberOfLines=0;[self.stack addArrangedSubview:label];return label;
@@ -114,7 +113,7 @@ static const CGFloat WPCAPPadding=16,WPCAPHeader=46;
     }
     [self addSection:@"建议回复"];
     [advice.replies enumerateObjectsUsingBlock:^(NSString *reply,NSUInteger index,__unused BOOL *stop){[self.stack addArrangedSubview:[self replyButton:reply index:index+1]];}];
-    UILabel *footer=[self addText:[NSString stringWithFormat:@"基于最近 %lu 条消息 · 点按填入，长按复制 · AI 生成，发送前请确认",(unsigned long)count] size:11 weight:UIFontWeightRegular color:WPThemeSecondaryText()];
+    UILabel *footer=[self addText:[NSString stringWithFormat:@"基于最近 %lu 条消息 · 点按填入，长按直接发送",(unsigned long)count] size:11 weight:UIFontWeightRegular color:WPThemeSecondaryText()];
     [self.stack setCustomSpacing:12 afterView:self.stack.arrangedSubviews[[self.stack.arrangedSubviews indexOfObject:footer]-1]];
     [self relayout];
 }
@@ -132,19 +131,17 @@ static const CGFloat WPCAPPadding=16,WPCAPHeader=46;
     button.accessibilityIdentifier=[NSString stringWithFormat:@"WPChatAdvisorReply%lu",(unsigned long)index];
     __weak typeof(self) weakSelf=self;
     [button addAction:[UIAction actionWithHandler:^(__unused UIAction *action){if(weakSelf.onPickReply)weakSelf.onPickReply(reply);}] forControlEvents:UIControlEventTouchUpInside];
-    UILongPressGestureRecognizer *press=[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(copyReply:)];
+    UILongPressGestureRecognizer *press=[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(sendReply:)];
+    press.cancelsTouchesInView=YES;
     [button addGestureRecognizer:press];
-    objc_setAssociatedObject(press,@selector(copyReply:),reply,OBJC_ASSOCIATION_COPY_NONATOMIC);
+    objc_setAssociatedObject(press,@selector(sendReply:),reply,OBJC_ASSOCIATION_COPY_NONATOMIC);
     return button;
 }
-- (void)copyReply:(UILongPressGestureRecognizer *)press {
+- (void)sendReply:(UILongPressGestureRecognizer *)press {
     if(press.state!=UIGestureRecognizerStateBegan)return;
-    NSString *reply=objc_getAssociatedObject(press,@selector(copyReply:));
+    NSString *reply=objc_getAssociatedObject(press,@selector(sendReply:));
     if(!reply.length)return;
-    UIPasteboard.generalPasteboard.string=reply;
-    [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
-    self.titleLabel.text=@"已复制";
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,1200*NSEC_PER_MSEC),dispatch_get_main_queue(),^{self.titleLabel.text=[NSString stringWithFormat:@"聊天参谋 · %@",WPChatAdvisor.currentPreset.title];});
+    if(self.onSendReply)self.onSendReply(reply);
 }
 
 #pragma mark Layout

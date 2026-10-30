@@ -1,7 +1,5 @@
 #import "WPPetRenderer.h"
 #import "WPCommon.h"
-#import "WPMenuIcons.h"
-#import "WPAssetCorrections.h"
 #import "WPPagedPet.h"
 #import <ImageIO/ImageIO.h>
 
@@ -12,7 +10,7 @@ static NSInteger WPAtlasInteger(id value) {
 static NSSet<NSString *> *WPOneShotActions(void) {
     static NSSet<NSString *> *actions;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ actions = [NSSet setWithArray:@[@"reveal", @"retract", @"land", @"tap", @"longPress", @"petting"]]; });
+    dispatch_once(&once, ^{ actions = [NSSet setWithArray:@[@"reveal", @"retract", @"land", @"tap", @"longPress"]]; });
     return actions;
 }
 
@@ -28,54 +26,31 @@ static BOOL WPAtlasRowName(id value) {
         ![name containsString:@"\\"] && ![name containsString:@":"] && ![name containsString:@"\0"] &&
         [name.pathExtension.lowercaseString isEqual:@"png"];
 }
-static NSArray<NSString *> *WPAtlasRows(NSDictionary *metadata,BOOL bundled) {
-    BOOL local=!bundled && WPIsLocalPagedMetadata(metadata);
-    NSInteger columns=bundled?10:(local?[metadata[@"columns"] integerValue]:20),version=bundled?4:5;
+static NSArray<NSString *> *WPAtlasRows(NSDictionary *metadata) {
+    BOOL local=WPIsLocalPagedMetadata(metadata);
+    NSInteger columns=local?[metadata[@"columns"] integerValue]:20,version=5;
     NSInteger rowCount=local?[metadata[@"rows"] integerValue]:29;
     if(!WPAtlasExactInteger(metadata[@"spriteVersionNumber"],version,version) ||
        !WPAtlasExactInteger(metadata[@"columns"],columns,columns) || !WPAtlasExactInteger(metadata[@"rows"],rowCount,rowCount) ||
        !WPAtlasExactInteger(metadata[@"frameWidth"],192,192) || !WPAtlasExactInteger(metadata[@"frameHeight"],208,208) ||
        !WPAtlasExactInteger(metadata[@"frameRate"],6,30))return nil;
-    NSString *key=bundled?@"wpBundledRowAtlasPaths":@"rowAtlasPaths";
+    NSString *key=@"rowAtlasPaths";
     NSArray *paths=[metadata[key] isKindOfClass:NSArray.class]?metadata[key]:nil;
     NSArray *counts=[metadata[@"frameCounts"] isKindOfClass:NSArray.class]?metadata[@"frameCounts"]:nil;
     if(paths.count!=(NSUInteger)rowCount || counts.count!=(NSUInteger)rowCount || ![metadata[@"spritesheetPath"] isKindOfClass:NSString.class] ||
-       ![metadata[@"spritesheetPath"] isEqual:(bundled?@"spritesheet.png":paths.firstObject)])return nil;
+       ![metadata[@"spritesheetPath"] isEqual:paths.firstObject])return nil;
     NSMutableSet *seen=[NSMutableSet new];
     for(NSUInteger row=0;row<(NSUInteger)rowCount;row++){
         if(!WPAtlasRowName(paths[row]) || [seen containsObject:paths[row]] || !WPAtlasExactInteger(counts[row],1,columns))return nil;
         [seen addObject:paths[row]];
     }
     NSDictionary *mapping=[metadata[@"semanticRows"] isKindOfClass:NSDictionary.class]?metadata[@"semanticRows"]:nil;
-    NSSet *allowed=[NSSet setWithArray:@[@"idle",@"tap",@"longPress",@"petting",@"sendPet",@"receivePet",@"sendMiss",@"receiveMiss",@"sendAnger",@"receiveAnger",@"angerIdle",@"angerResolved",@"drag",@"land",@"shake",@"peekLeft",@"peekRight",@"reveal",@"retract"]];
-    if(!local && (!mapping || ![[NSSet setWithArray:mapping.allKeys] isEqual:allowed]))return nil;
+    if(!local && !mapping)return nil;
     if(!local){
         for(id value in mapping.allValues)if(!WPAtlasExactInteger(value,0,rowCount-1))return nil;
         if(metadata[@"onlinePhoneRow"] && !WPAtlasExactInteger(metadata[@"onlinePhoneRow"],0,rowCount-1))return nil;
     }
     return paths;
-}
-// Optional bundle-only packing removes byte-identical cels without changing
-// logical columns, frame counts, or elapsed-frame timing. Imported metadata
-// cannot opt into private bundle paths.
-static NSArray<NSArray<NSNumber *> *> *WPCompactFrameMaps(NSDictionary *metadata) {
-    NSArray *paths=[metadata[@"wpBundledCompactRowAtlasPaths"] isKindOfClass:NSArray.class]?metadata[@"wpBundledCompactRowAtlasPaths"]:nil;
-    NSArray *maps=[metadata[@"wpBundledCompactFrameMaps"] isKindOfClass:NSArray.class]?metadata[@"wpBundledCompactFrameMaps"]:nil;
-    if(paths.count!=29 || maps.count!=29)return nil;
-    // Bundle-only aliases may share byte-identical strips. Each logical row
-    // still validates its own frame map and exact physical image dimensions.
-    for(NSUInteger row=0;row<29;row++){
-        if(!WPAtlasRowName(paths[row]))return nil;
-        NSArray *map=[maps[row] isKindOfClass:NSArray.class]?maps[row]:nil;
-        if(map.count!=10)return nil;
-        NSMutableIndexSet *seen=[NSMutableIndexSet new];
-        for(id index in map){if(!WPAtlasExactInteger(index,0,9))return nil;[seen addIndex:[index unsignedIntegerValue]];}
-        if(!seen.count || seen.firstIndex!=0 || seen.lastIndex+1!=seen.count)return nil;
-    }
-    return maps;
-}
-static NSUInteger WPCompactColumns(NSArray<NSNumber *> *map) {
-    NSUInteger columns=0;for(NSNumber *index in map)columns=MAX(columns,index.unsignedIntegerValue+1);return columns;
 }
 // A row is checked and decoded from the same ImageIO source. Validating all
 // other headers at selection time avoids discarding an imported pet later
@@ -122,7 +97,6 @@ static UIImage *WPLoadBoundedAtlas(NSString *path,NSUInteger expectedWidth,NSUIn
 @property(nonatomic) NSArray *rowColumnCounts;
 @property(nonatomic) NSMutableIndexSet *failedAtlasRows;
 @property(nonatomic) NSString *assetDirectory;
-@property(nonatomic) NSDictionary *atlasCorrections;
 @property(nonatomic) NSInteger loadedAtlasRow;
 @end
 @implementation WPAtlasLoadState
@@ -159,23 +133,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
         NSData *data = [attributes[NSFileSize] unsignedLongLongValue]<=128*1024 ? [NSData dataWithContentsOfFile:metadataPath] : nil;
         id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
         metadata = [json isKindOfClass:NSDictionary.class] ? json : @{};
-        NSDictionary *corrections=WPKnownAtlasCorrections(path,metadata);
         NSString *assetPath=path;
-        if(corrections[@"spritesheet.png"]){
-            // The known old v4 image uses the identical grid/semantic timing.
-            // Reuse the corrected bundle's pages without replacing the user's
-            // imported selection, name or metadata with another pet.
-            NSData *bundleData=[NSData dataWithContentsOfFile:[bundled stringByAppendingPathComponent:@"pet.json"]];
-            id bundleJSON=bundleData?[NSJSONSerialization JSONObjectWithData:bundleData options:0 error:nil]:nil;
-            if([bundleJSON isKindOfClass:NSDictionary.class] && WPAtlasRows(bundleJSON,YES)){
-                NSMutableDictionary *paged=[metadata mutableCopy];
-                paged[@"spriteVersionNumber"]=@4;paged[@"columns"]=@10;paged[@"rows"]=@29;paged[@"spritesheetPath"]=@"spritesheet.png";
-                paged[@"wpBundledRowAtlasPaths"]=bundleJSON[@"wpBundledRowAtlasPaths"];
-                for(NSString *key in @[@"wpBundledCompactRowAtlasPaths",@"wpBundledCompactFrameMaps"])
-                    if(bundleJSON[key])paged[key]=bundleJSON[key];
-                if(WPAtlasRows(paged,YES)){metadata=paged;assetPath=bundled;}
-            }
-        }
         NSInteger legacyVersion=WPAtlasInteger(metadata[@"spriteVersionNumber"]);
         if(![assetPath.stringByStandardizingPath isEqual:bundled.stringByStandardizingPath] && legacyVersion>=1 && legacyVersion<=4){
             NSString *paged=WPPagedLegacyDirectory(assetPath,metadata,nil);
@@ -195,44 +153,28 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
                 if(!w || !h || w>512 || h>512)continue;
             }
         }
-        BOOL bundledPaged=[assetPath.stringByStandardizingPath isEqual:bundled.stringByStandardizingPath] &&
-            [metadata[@"id"] isEqual:@"yue-zhour-20261021"] && metadata[@"wpBundledRowAtlasPaths"]!=nil;
-        if(WPAtlasInteger(metadata[@"spriteVersionNumber"])==5 || bundledPaged){
-            NSArray *paths=WPAtlasRows(metadata,bundledPaged);BOOL valid=paths!=nil;
-            NSUInteger width=bundledPaged?1920:(NSUInteger)WPAtlasInteger(metadata[@"columns"])*192;
-            NSMutableArray *resolvedPaths=[paths mutableCopy],*resolvedMaps=[NSMutableArray new],*resolvedColumns=[NSMutableArray new];
-            NSArray *compactMaps=bundledPaged?WPCompactFrameMaps(metadata):nil;
-            NSArray *compactPaths=compactMaps?metadata[@"wpBundledCompactRowAtlasPaths"]:nil;
+        if(WPAtlasInteger(metadata[@"spriteVersionNumber"])==5){
+            NSArray *paths=WPAtlasRows(metadata);BOOL valid=paths!=nil;
+            NSUInteger width=(NSUInteger)WPAtlasInteger(metadata[@"columns"])*192;
+            NSMutableArray *resolvedMaps=[NSMutableArray new],*resolvedColumns=[NSMutableArray new];
             NSMutableIndexSet *failed=[NSMutableIndexSet new];
             for(NSUInteger row=0;valid && row<paths.count;row++){
-                NSArray *map=compactMaps[row];NSUInteger packedColumns=WPCompactColumns(map);
-                BOOL compact=map && WPAtlasRowHeader([assetPath stringByAppendingPathComponent:compactPaths[row]],packedColumns*192);
-                BOOL ordinary=compact || WPAtlasRowHeader(corrections[paths[row]]?:[assetPath stringByAppendingPathComponent:paths[row]],width);
-                if(compact)resolvedPaths[row]=compactPaths[row];
-                [resolvedMaps addObject:compact?map:@[]];
-                [resolvedColumns addObject:@(compact?packedColumns:width/192)];
-                if(!ordinary){if(bundledPaged)[failed addIndex:row];else valid=NO;}
+                if(!WPAtlasRowHeader([assetPath stringByAppendingPathComponent:paths[row]],width))valid=NO;
+                [resolvedMaps addObject:@[]];[resolvedColumns addObject:@(width/192)];
             }
-            // Corrupt bundle pages must never cause an eager decode of the
-            // 44 MiB full atlas. Healthy actions remain available; a failed
-            // action keeps the last visible frame until the next action.
-            if([failed containsIndex:0])valid=NO;
-            NSUInteger firstWidth=resolvedColumns.count?[resolvedColumns.firstObject unsignedIntegerValue]*192:width;
-            image=valid?WPLoadBoundedAtlas(corrections[resolvedPaths.firstObject]?:[assetPath stringByAppendingPathComponent:resolvedPaths.firstObject],firstWidth,208):nil;
-            if(image){
-                state.rowAtlasPaths=resolvedPaths;state.rowFrameMaps=resolvedMaps;state.rowColumnCounts=resolvedColumns;state.failedAtlasRows=failed;
-                state.assetDirectory=assetPath;state.atlasCorrections=corrections;state.loadedAtlasRow=0;
+            UIImage *page=valid?WPLoadBoundedAtlas([assetPath stringByAppendingPathComponent:paths.firstObject],width,208):nil;
+            if(page){
+                image=page;state.rowAtlasPaths=paths;state.rowFrameMaps=resolvedMaps;state.rowColumnCounts=resolvedColumns;
+                state.failedAtlasRows=failed;state.assetDirectory=assetPath;state.loadedAtlasRow=0;
                 loadedPath=path;break;
             }
-            // Imported v5 is never reinterpreted as a legacy full atlas.
-            // A broken built-in idle page uses the small emergency drawing.
             continue;
         }
         // The current built-in pet is paged. Even malformed metadata must
         // not silently allocate the development-only full atlas.
         if([assetPath.stringByStandardizingPath isEqual:bundled.stringByStandardizingPath])continue;
         for (NSString *file in @[@"spritesheet.png", @"spritesheet.webp", @"pet.png"]) {
-            UIImage *candidate = WPLoadBoundedAtlas(corrections[file]?:[assetPath stringByAppendingPathComponent:file],0,0);
+            UIImage *candidate = WPLoadBoundedAtlas([assetPath stringByAppendingPathComponent:file],0,0);
             if (candidate.CGImage && CGImageGetWidth(candidate.CGImage) && CGImageGetHeight(candidate.CGImage)) {
                 image = candidate; break;
             }
@@ -275,6 +217,9 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
 @interface WPPetRenderer ()
 @property (nonatomic) CALayer *spriteLayer;
 @property (nonatomic) UIImage *atlas;
+// A transient read/paging failure must not permanently replace the selected
+// downloaded pet. Retry when the app becomes active again.
+@property (nonatomic) BOOL selectedPetLoaded;
 @property (nonatomic) NSData *alphaMask;
 @property (nonatomic) size_t atlasWidth;
 @property (nonatomic) size_t atlasHeight;
@@ -297,7 +242,6 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
 @property (nonatomic) NSDictionary *metadata;
 @property (nonatomic, copy) NSString *reactionKind;
 @property (nonatomic, copy) NSString *queuedReaction;
-@property (nonatomic) UIImageView *moodIcon;
 @property (nonatomic,copy) NSArray<NSString *> *rowAtlasPaths;
 @property (nonatomic,copy) NSString *assetDirectory;
 @property (nonatomic,copy) NSArray<NSArray<NSNumber *> *> *rowFrameMaps;
@@ -307,7 +251,6 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
 @property (nonatomic) NSInteger displayedAtlasRow;
 @property (nonatomic) NSInteger displayedColumns;
 @property (nonatomic) NSInteger displayedRows;
-@property (nonatomic,copy) NSDictionary<NSString *,NSString *> *atlasCorrections;
 @property (nonatomic) NSInteger loadedAtlasRow;
 @property (nonatomic) BOOL animationPaused;
 @property (nonatomic) NSUInteger assetGeneration;
@@ -343,7 +286,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
         self.opaque = NO;
         self.isAccessibilityElement = YES;
         self.accessibilityLabel = @"桌宠";
-        self.accessibilityHint = @"拖动调整位置，按住左右摇晃打开互动记录，长按滑动选择功能，单击或双击执行设定的快捷功能";
+        self.accessibilityHint = @"拖动调整位置，长按或摇晃执行设定的快捷功能";
         self.accessibilityTraits = UIAccessibilityTraitButton;
         _spriteLayer = [CALayer layer];
         _spriteLayer.contentsGravity = kCAGravityResizeAspect;
@@ -359,48 +302,10 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
 }
 - (void)layoutSubviews {
     [super layoutSubviews]; self.spriteLayer.frame = self.bounds;
-    CGFloat side = MAX(16, self.bounds.size.width * .24);
-    self.moodIcon.frame = CGRectMake(self.bounds.size.width * .06, 0, side, side);
-}
-- (NSInteger)angryRow {
-    id row=[self.metadata[@"semanticRows"] isKindOfClass:NSDictionary.class]?self.metadata[@"semanticRows"] [@"angerIdle"]:nil;
-    return [row isKindOfClass:NSNumber.class]?MAX(0,MIN(self.rows-1,[row integerValue])):(self.rows>=6?5:0);
-}
+ }
 - (NSInteger)idleRow {
-    if(self.angry)return [self angryRow];
-    id onlineRow=self.metadata[@"onlinePhoneRow"];
-    if(self.peerOnline && [onlineRow isKindOfClass:NSNumber.class] && [onlineRow integerValue]>=0 && [onlineRow integerValue]<self.rows)
-        return [onlineRow integerValue];
-    id row=[self.metadata[@"semanticRows"] isKindOfClass:NSDictionary.class]?self.metadata[@"semanticRows"] [@"idle"]:nil;
+    id row=[self.metadata[@"semanticRows"] isKindOfClass:NSDictionary.class]?self.metadata[@"semanticRows"][@"idle"]:nil;
     return [row isKindOfClass:NSNumber.class]?MAX(0,MIN(self.rows-1,[row integerValue])):0;
-}
-- (void)setPeerOnline:(BOOL)peerOnline {
-    if(_peerOnline==peerOnline)return;
-    _peerOnline=peerOnline;
-    if(CACurrentMediaTime()<self.greetingUntil || self.dragRow>=0 || self.heldPeekRow>=0)return;
-    self.animationRow=[self idleRow];self.frameCount=[self countForRow:self.animationRow];self.frameIndex=0;
-    self.animationStartedAt=CACurrentMediaTime();[self showFrame];
-}
-- (void)setAngry:(BOOL)angry {
-    if (_angry == angry) return;
-    _angry = angry;
-    if (!self.moodIcon) {
-        self.moodIcon = [[UIImageView alloc] initWithImage:WPBrokenHeartMenuIcon()];
-        self.moodIcon.tintColor = UIColor.systemGrayColor;
-        self.moodIcon.contentMode = UIViewContentModeScaleAspectFit;
-        self.moodIcon.userInteractionEnabled = NO;
-        [self addSubview:self.moodIcon];
-        [self setNeedsLayout];
-    }
-    // The anger row differs per atlas, so a small broken heart is the shared cue.
-    self.moodIcon.hidden = !angry;
-    self.accessibilityValue = angry ? @"生气中，等待回应" : nil;
-    if (CACurrentMediaTime() >= self.greetingUntil && self.dragRow<0) {
-        self.animationRow = self.heldPeekRow >= 0 ? self.heldPeekRow : [self idleRow];
-        self.frameCount = [self countForRow:self.animationRow]; self.frameIndex = 0;
-        self.animationStartedAt = CACurrentMediaTime();
-        [self showFrame];
-    }
 }
 - (void)reloadPet {
     if(self.animationPaused){self.needsReloadOnActivation=YES;return;}
@@ -425,10 +330,20 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     }});
 }
 - (void)applyLoadedState:(WPAtlasLoadState *)state selected:(NSString *)selected {
-    self.needsReloadOnActivation=NO;self.loadedSelectedDirectory=selected?:@"";
     UIImage *image=state.image;NSDictionary *metadata=state.metadata;NSString *loadedPath=state.loadedPath;
+    BOOL temporaryFallback=selected.length && ![loadedPath isEqualToString:selected];
+    // Keep the already displayed selected pet during a transient reload
+    // failure rather than replacing it with the built-in pet mid-session.
+    if(temporaryFallback && self.selectedPetLoaded && self.atlas &&
+       [self.loadedSelectedDirectory isEqualToString:selected]){
+        self.needsReloadOnActivation=YES;
+        return;
+    }
+    self.needsReloadOnActivation=temporaryFallback;
+    self.selectedPetLoaded=selected.length && !temporaryFallback && image!=nil;
+    self.loadedSelectedDirectory=selected?:@"";
     self.rowAtlasPaths=state.rowAtlasPaths;self.rowFrameMaps=state.rowFrameMaps;self.rowColumnCounts=state.rowColumnCounts;
-    self.failedAtlasRows=state.failedAtlasRows;self.assetDirectory=state.assetDirectory;self.atlasCorrections=state.atlasCorrections;self.loadedAtlasRow=state.loadedAtlasRow;
+    self.failedAtlasRows=state.failedAtlasRows;self.assetDirectory=state.assetDirectory;self.loadedAtlasRow=state.loadedAtlasRow;
     [WPPreferences() setObject:@{@"selectedReference":WPSelectedPetReference()?:@"",
         @"selectedDirectoryName":selected.lastPathComponent?:@"",
         @"selectedExists":@([[NSFileManager defaultManager] fileExistsAtPath:selected?:@""]),
@@ -461,7 +376,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     self.accessibilityLabel = [@"桌宠 " stringByAppendingString:self.petName];
 }
 - (void)installFallback {
-    self.rowAtlasPaths=nil;self.rowFrameMaps=nil;self.rowColumnCounts=nil;self.failedAtlasRows=[NSMutableIndexSet new];self.assetDirectory=nil;self.atlasCorrections=nil;self.loadedAtlasRow=-1;self.metadata=@{};
+    self.rowAtlasPaths=nil;self.rowFrameMaps=nil;self.rowColumnCounts=nil;self.failedAtlasRows=[NSMutableIndexSet new];self.assetDirectory=nil;self.loadedAtlasRow=-1;self.metadata=@{};
     UIGraphicsImageRendererFormat *format=[UIGraphicsImageRendererFormat defaultFormat];
     format.scale=1;format.opaque=NO;format.preferredRange=UIGraphicsImageRendererFormatRangeStandard;
     UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(192, 208) format:format];
@@ -495,7 +410,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     if(row<0 || (NSUInteger)row>=self.rowAtlasPaths.count || [self.failedAtlasRows containsIndex:(NSUInteger)row])return NO;
     if(WPAtlasSynchronousFixture()){
         NSString *name=self.rowAtlasPaths[row];NSUInteger columns=[self.rowColumnCounts[row] unsignedIntegerValue];
-        UIImage *image=WPLoadBoundedAtlas(self.atlasCorrections[name]?:[self.assetDirectory stringByAppendingPathComponent:name],columns*192,208);
+        UIImage *image=WPLoadBoundedAtlas([self.assetDirectory stringByAppendingPathComponent:name],columns*192,208);
         if(!image){[self.failedAtlasRows addIndex:(NSUInteger)row];return NO;}
         self.atlas=image;self.loadedAtlasRow=row;[self prepareAlphaMask];return YES;
     }
@@ -505,7 +420,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     NSInteger row=self.desiredAtlasRow;
     if(self.rowDecodeInFlight || self.reloadInFlight || self.animationPaused || row<0 || (NSUInteger)row>=self.rowAtlasPaths.count ||
        [self.failedAtlasRows containsIndex:(NSUInteger)row] || (self.loadedAtlasRow==row && self.atlas.CGImage))return;
-    NSString *name=self.rowAtlasPaths[row],*path=self.atlasCorrections[name]?:[self.assetDirectory stringByAppendingPathComponent:name];
+    NSString *name=self.rowAtlasPaths[row],*path=[self.assetDirectory stringByAppendingPathComponent:name];
     NSUInteger columns=[self.rowColumnCounts[row] unsignedIntegerValue],generation=self.assetGeneration,token=++self.rowDecodeToken;
     self.rowDecodeInFlight=YES;__weak typeof(self) weakSelf=self;
     dispatch_async(WPPetAssetWorkQueue(),^{@autoreleasepool {
@@ -570,9 +485,10 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     return MAX(1,self.columns);
 }
 - (void)setAnimationActive:(BOOL)active {
+    BOOL wasPaused=self.animationPaused;
     self.animationPaused=!active;
     NSString *expected=self.reloadInFlight?self.requestedSelectedDirectory:self.loadedSelectedDirectory;
-    if(active && (self.needsReloadOnActivation || ![(WPSelectedPetDirectory()?:@"") isEqual:(expected?:@"")])){
+    if(active && ((self.needsReloadOnActivation && wasPaused) || ![(WPSelectedPetDirectory()?:@"") isEqual:(expected?:@"")])){
         [self reloadPet];
     }else if(active && !self.atlas && !self.reloadInFlight){
         if(self.metadata.count && self.rowAtlasPaths.count){self.loadedAtlasRow=-1;[self showFrame];}
@@ -597,9 +513,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     NSDictionary *all = [self.metadata[@"passiveAnimations"] isKindOfClass:NSDictionary.class]
         ? self.metadata[@"passiveAnimations"] : nil;
     if (!all) return NSNotFound;
-    NSInteger onlineRow = [self.metadata[@"onlinePhoneRow"] isKindOfClass:NSNumber.class]
-        ? [self.metadata[@"onlinePhoneRow"] integerValue] : -1;
-    NSString *key = self.peerOnline && self.animationRow == onlineRow ? @"onlinePhone" : @"idle";
+    NSString *key = @"idle";
     if ([key isEqualToString:@"idle"] && self.animationRow != [self semanticRowForAction:@"idle"])
         return NSNotFound;
     NSDictionary *config = [all[key] isKindOfClass:NSDictionary.class] ? all[key] : nil;
@@ -637,39 +551,20 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     }
     NSInteger elapsedFrames=MAX(0,(NSInteger)floor((link.timestamp-self.animationStartedAt)*self.frameRate+.001));
     BOOL oneShot=greeting && [WPOneShotActions() containsObject:self.reactionKind];
-    NSInteger passiveFrame = !greeting && self.dragRow < 0 && self.heldPeekRow < 0 && !self.angry
+    NSInteger passiveFrame = !greeting && self.dragRow < 0 && self.heldPeekRow < 0
         ? [self passiveFrameForElapsedFrames:elapsedFrames] : NSNotFound;
     NSInteger frame=passiveFrame != NSNotFound ? passiveFrame :
         (oneShot ? MIN(self.frameCount-1,elapsedFrames) : elapsedFrames%self.frameCount);
     BOOL frameChanged=frame!=self.frameIndex;self.frameIndex=frame;
     if(rowChanged || frameChanged || endedReaction)[self showFrame];
 }
-- (BOOL)playReaction:(NSString *)kind {
-    NSString *action=[kind isEqual:@"anger"]?@"receiveAnger":([kind isEqual:@"pet"]?@"receivePet":@"receiveMiss");
-    return [self playSemanticAction:action];
-}
 - (BOOL)playMessageAcknowledgement {
-    if(self.animationPaused || self.hidden || self.angry || self.dragRow>=0 || self.heldPeekRow>=0 || self.queuedReaction)return NO;
+    if(self.animationPaused || self.hidden || self.dragRow>=0 || self.heldPeekRow>=0 || self.queuedReaction)return NO;
     if(self.reactionKind && CACurrentMediaTime()<self.greetingUntil)return NO;
     return [self playSemanticAction:@"tap"];
 }
-- (BOOL)playLocalPreviewReaction:(NSString *)kind {
-    if(self.animationPaused || self.hidden || ![@[@"miss",@"anger"] containsObject:kind])return NO;
-    NSString *action=[kind isEqual:@"anger"]?@"receiveAnger":@"receiveMiss";
-    // showMessage reveals an edge-hidden pet first. Preserve that transition,
-    // replacing its pending preview so the last button always wins.
-    if([self.reactionKind isEqual:@"reveal"] && CACurrentMediaTime()<self.greetingUntil){
-        self.queuedReaction=action;
-        return NO;
-    }
-    self.reactionKind=nil;self.queuedReaction=nil;self.greetingUntil=0;
-    self.dragRow=-1;
-    return [self playSemanticAction:action];
-}
 - (NSInteger)semanticRowForAction:(NSString *)action {
-    static NSDictionary *fallback;static dispatch_once_t once;dispatch_once(&once,^{fallback=@{@"tap":@6,@"longPress":@6,@"petting":@3,@"sendPet":@3,@"receivePet":@4,
-        @"sendMiss":@4,@"receiveMiss":@4,@"sendAnger":@5,@"receiveAnger":@5,@"angerIdle":@5,
-        @"angerResolved":@4,@"drag":@1,@"land":@0,@"shake":@8,@"peekLeft":@0,@"peekRight":@0,
+    static NSDictionary *fallback;static dispatch_once_t once;dispatch_once(&once,^{fallback=@{@"tap":@6,@"longPress":@6,@"drag":@1,@"land":@0,@"shake":@8,@"peekLeft":@0,@"peekRight":@0,
         @"reveal":@4,@"retract":@6};});
     id custom=[self.metadata[@"semanticRows"] isKindOfClass:NSDictionary.class]?self.metadata[@"semanticRows"][action]:nil;
     NSInteger row=[custom isKindOfClass:NSNumber.class]?[custom integerValue]:[fallback[action] integerValue];
@@ -714,7 +609,7 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     CFTimeInterval now=CACurrentMediaTime();
     BOOL playing=now<self.greetingUntil && self.reactionKind;
     if(playing && [self.reactionKind isEqual:action])return NO;
-    BOOL urgent=[@[@"reveal",@"retract",@"drag",@"land",@"shake",@"longPress",@"petting",@"tap"] containsObject:action];
+    BOOL urgent=[@[@"reveal",@"retract",@"drag",@"land",@"shake",@"longPress",@"tap"] containsObject:action];
     if(playing && !urgent){if(![self.queuedReaction isEqual:action])self.queuedReaction=action;return NO;}
     if(urgent)self.queuedReaction=nil;
     self.reactionKind=action;self.reactionRow=[self semanticRowForAction:action];
@@ -725,28 +620,6 @@ static WPAtlasLoadState *WPLoadPetState(NSString *selected,NSString *bundled) {
     self.greetingUntil=now+(oneCycle?1:2)*(CGFloat)self.frameCount/MAX(1,self.frameRate);
     [self showFrame];
     return YES;
-}
-- (void)playGreeting {
-    self.reactionKind=@"miss";
-    self.reactionRow=self.rows>=5?4:0;
-    self.greetingUntil = CACurrentMediaTime() + 2.2;
-    self.animationRow=self.reactionRow;self.frameCount=[self countForRow:self.animationRow];self.frameIndex=0;
-    self.animationStartedAt=CACurrentMediaTime();[self showFrame];
-    if (self.rows < 5 && !UIAccessibilityIsReduceMotionEnabled()) {
-        CAKeyframeAnimation *jump = [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.y"];
-        jump.values = @[@0, @-16, @0, @-8, @0]; jump.duration = .65;
-        [self.spriteLayer addAnimation:jump forKey:@"greeting"];
-    }
-}
-- (void)playAngry {
-    self.reactionKind=@"anger";
-    self.reactionRow=[self angryRow];self.greetingUntil=CACurrentMediaTime()+2.2;
-    self.animationRow=self.reactionRow;self.frameCount=[self countForRow:self.animationRow];self.frameIndex=0;
-    self.animationStartedAt=CACurrentMediaTime();[self showFrame];
-    if(!UIAccessibilityIsReduceMotionEnabled()){
-        CAKeyframeAnimation *shake=[CAKeyframeAnimation animationWithKeyPath:@"transform.translation.x"];
-        shake.values=@[@0,@-5,@5,@-5,@4,@0];shake.duration=.65;[self.spriteLayer addAnimation:shake forKey:@"anger"];
-    }
 }
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     if (![super pointInside:point withEvent:event]) return NO;

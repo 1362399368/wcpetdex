@@ -24,7 +24,16 @@ void WPApplyThemeToNavigation(UINavigationController *navigation){
     navigation.view.backgroundColor=WPThemeBackground();
 }
 @implementation WPAdaptiveNavigationController
-- (void)viewDidLoad{[super viewDidLoad];WPApplyThemeToNavigation(self);}
+- (void)viewDidLoad{[super viewDidLoad];WPApplyThemeToNavigation(self);self.interactivePopGestureRecognizer.enabled=YES;}
+- (void)pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    if(self.viewControllers.count && self.willPushChild)self.willPushChild();
+    [super pushViewController:viewController animated:animated];
+}
+- (UIViewController *)popViewControllerAnimated:(BOOL)animated {
+    UIViewController *result=[super popViewControllerAnimated:animated];
+    if(result && !animated && self.didPopWithoutAnimation)self.didPopWithoutAnimation();
+    return result;
+}
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection{
     [super traitCollectionDidChange:previousTraitCollection];
     if(!previousTraitCollection || [self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection])WPApplyThemeToNavigation(self);
@@ -66,13 +75,14 @@ UILabel *WPThemeLabel(NSString *text,CGFloat size,UIFontWeight weight,UIColor *c
     [super viewDidLoad];self.view.backgroundColor=WPThemeBackground();
     self.scrollView=[UIScrollView new];self.scrollView.translatesAutoresizingMaskIntoConstraints=NO;self.scrollView.alwaysBounceVertical=YES;
     self.scrollView.keyboardDismissMode=UIScrollViewKeyboardDismissModeInteractive;[self.view addSubview:self.scrollView];
-    self.stack=[UIStackView new];self.stack.axis=UILayoutConstraintAxisVertical;self.stack.spacing=14;self.stack.translatesAutoresizingMaskIntoConstraints=NO;
+    self.stack=[UIStackView new];self.stack.axis=UILayoutConstraintAxisVertical;self.stack.spacing=8;self.stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.scrollView addSubview:self.stack];
     UILayoutGuide *content=self.scrollView.contentLayoutGuide,*frame=self.scrollView.frameLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [self.scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],[self.scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [self.scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [self.stack.topAnchor constraintEqualToAnchor:content.topAnchor constant:12],[self.stack.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-24],
+        [content.widthAnchor constraintEqualToAnchor:frame.widthAnchor],
+        [self.stack.topAnchor constraintEqualToAnchor:content.topAnchor constant:4],[self.stack.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-12],
         [self.stack.leadingAnchor constraintEqualToAnchor:frame.leadingAnchor constant:16],[self.stack.trailingAnchor constraintEqualToAnchor:frame.trailingAnchor constant:-16]]];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboard:) name:UIKeyboardWillChangeFrameNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboard:) name:UIKeyboardWillHideNotification object:nil];
@@ -95,10 +105,15 @@ UILabel *WPThemeLabel(NSString *text,CGFloat size,UIFontWeight weight,UIColor *c
 }
 - (void)addSectionTitle:(NSString *)title{
     UILabel *label=WPThemeLabel(title,13,UIFontWeightSemibold,WPThemeSecondaryText());
-    UIView *wrap=[UIView new];label.translatesAutoresizingMaskIntoConstraints=NO;[wrap addSubview:label];
+    [label setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
+    [label setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
+    UIView *wrap=[UIView new];
+    [wrap setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
+    [wrap setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
+    label.translatesAutoresizingMaskIntoConstraints=NO;[wrap addSubview:label];
     [NSLayoutConstraint activateConstraints:@[[label.leadingAnchor constraintEqualToAnchor:wrap.leadingAnchor constant:6],[label.trailingAnchor constraintEqualToAnchor:wrap.trailingAnchor constant:-6],
-        [label.topAnchor constraintEqualToAnchor:wrap.topAnchor constant:8],[label.bottomAnchor constraintEqualToAnchor:wrap.bottomAnchor]]];
-    [self.stack addArrangedSubview:wrap];[self.stack setCustomSpacing:8 afterView:wrap];
+        [label.topAnchor constraintEqualToAnchor:wrap.topAnchor constant:4],[label.bottomAnchor constraintEqualToAnchor:wrap.bottomAnchor]]];
+    [self.stack addArrangedSubview:wrap];[self.stack setCustomSpacing:4 afterView:wrap];
 }
 - (void)addNote:(NSString *)text{
     UILabel *label=WPThemeLabel(text,12,UIFontWeightRegular,WPThemeSecondaryText());
@@ -194,7 +209,7 @@ UILabel *WPThemeLabel(NSString *text,CGFloat size,UIFontWeight weight,UIColor *c
 }
 - (void)alert:(NSString *)message{
     if(self.presentedViewController)return;
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"双人桌宠" message:message preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Zhour" message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];[self presentViewController:alert animated:YES completion:nil];
 }
 @end

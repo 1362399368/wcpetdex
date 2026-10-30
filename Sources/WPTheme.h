@@ -11,6 +11,8 @@ FOUNDATION_EXPORT UIColor *WPThemeOutgoingBubble(void);
 FOUNDATION_EXPORT const CGFloat WPThemeCardRadius;
 FOUNDATION_EXPORT void WPApplyThemeToNavigation(UINavigationController *navigation);
 @interface WPAdaptiveNavigationController : UINavigationController
+@property(nonatomic,copy,nullable) void (^willPushChild)(void);
+@property(nonatomic,copy,nullable) void (^didPopWithoutAnimation)(void);
 @end
 FOUNDATION_EXPORT UIView *WPThemeIconTile(UIImage *image, UIColor *tint, CGFloat side);
 FOUNDATION_EXPORT UILabel *WPThemePill(NSString *text, UIColor *color);

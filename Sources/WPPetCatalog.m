@@ -237,7 +237,7 @@ static NSArray<NSDictionary *> *WPParseManifest(NSData *data, NSError **error) {
     if (index >= urls.count) {
         NSURL *cache = [[WPPetCatalog cacheRootDirectory] URLByAppendingPathComponent:@"manifest.json"];
         NSData *data = [NSData dataWithContentsOfURL:cache];
-        if (!data) data = [NSData dataWithContentsOfFile:[WPResourceBundle() pathForResource:@"petdex-manifest-snapshot" ofType:@"json"]];
+        if (!data) data = [NSData dataWithContentsOfFile:[WPResourceDirectory() stringByAppendingPathComponent:@"petdex-manifest-snapshot.json"]];
         NSError *parseError;
         NSArray *pets = self.cachedPets ?: (data ? WPParseManifest(data, &parseError) : nil);
         [self finishCatalog:pets ?: @[] error:lastError ?: parseError ?: WPError(8, @"暂时无法连接 Petdex，请稍后重试。")];
