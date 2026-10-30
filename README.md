@@ -9,6 +9,6 @@ WCPetdex 汇集两个最初带双人互动的微信 iOS 桌宠开源项目，以
 
 双人互动版保留各自原有构建方式与配对服务，参见各目录的 README。配对需要自行配置服务；示例服务地址不能直接使用。Zhour 大众版的构建、使用与验证说明请见其分支。源码和模拟器测试不能代替真实设备上的微信兼容性验证。
 
-仓库保留两份原项目的提交历史，原始分支为 `legacy/zhouyou-couple` 和 `legacy/aria-couple`。原仓库：[周游版](https://github.com/1362399368/WeChatPet-Zhouyou) · [Aria 版](https://github.com/1362399368/WeChatPet-Aria)。
+仓库保留两份原项目的提交历史。原始分支为 `legacy/zhouyou-couple` 和 `legacy/aria-couple`；周游旧单身版开发分支为 `legacy/zhouyou-single-original`。[原周游仓库的拉取请求存档](history/WeChatPet-Zhouyou/)保存了两条已关闭请求的公开记录。
 
 各项目代码按其目录内的 MIT 许可证发布。角色美术与桌宠素材不属于代码的 MIT 许可范围；使用或再分发前请分别阅读各目录的 `ASSET-LICENSE.md`。
