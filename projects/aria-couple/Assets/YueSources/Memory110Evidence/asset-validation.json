@@ -1,0 +1,333 @@
+{
+  "baseVersion": "1.0.7",
+  "newVersion": "1.1.0",
+  "frames": 286,
+  "rows": 29,
+  "alphaUnchanged": true,
+  "timingAndSemanticsUnchanged": true,
+  "allStripsExactlyMatchFullAtlas": true,
+  "neckRepair": [
+    {
+      "row": 8,
+      "frame": 0,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 1,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 2,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 3,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 4,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 5,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 6,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 7,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 8,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 8,
+      "frame": 9,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 1,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 2,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 3,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 4,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 5,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 6,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 7,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 8,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 18,
+      "frame": 9,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 0,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 1,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 2,
+      "localBox": [
+        70,
+        90,
+        115,
+        93
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 3,
+      "localBox": [
+        70,
+        90,
+        115,
+        93
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 4,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 5,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 6,
+      "localBox": [
+        70,
+        92,
+        115,
+        95
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 7,
+      "localBox": [
+        70,
+        92,
+        115,
+        95
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 8,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 20,
+      "frame": 9,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 21,
+      "frame": 0,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 21,
+      "frame": 1,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    },
+    {
+      "row": 21,
+      "frame": 2,
+      "localBox": [
+        70,
+        91,
+        115,
+        94
+      ]
+    }
+  ],
+  "baselineSHA256": "6c80ca328a8ac4b5c5015e4cee47958d3d8764a887b341ffabfd133f8ff2a475",
+  "updatedSHA256": "b8df562fb9868985363f3f4176a8e32322e8a22f24dffa843572593a0b1feb89"
+}

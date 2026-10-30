@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+data/
+.env
+.env.*
+!.env.example
+deploy/.env
+deploy/secrets/
+*.sqlite3*
+*.backup-*
+*snapshot*.json
+*tokens*.json

@@ -1,0 +1,13 @@
+Petdex catalog snapshot
+URL: https://assets.petdex.dev/manifests/petdex-v2.json
+Generated at: 2026-10-18T10:09:27.548Z
+Entries: 5086
+Retrieved: 2026-10-18
+SHA-256: d53923c277139e328f58dec9751322e4e4d8f46988629753642cbecda8f3ff2e
+
+Catalog adapter is an independent Objective-C implementation based on the documented public formats.
+Official integration docs: https://github.com/crafter-station/petdex#for-builders
+Official v1/v2 parser reference: https://github.com/crafter-station/petdex/blob/main/packages/petdex-cli/src/manifest.ts
+Canonical asset origin reference: https://github.com/crafter-station/petdex/blob/main/src/lib/r2-public-url.ts
+
+Online catalog and downloads need network access. Endpoint access varied in this environment (HTTP 403 on an initial attempt; HTTP 200 with Accept and User-Agent headers). The client sets these headers and tries canonical v2, www v2, and legacy API endpoints.

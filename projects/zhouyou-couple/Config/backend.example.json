@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "endpoints": {
+    "production": "wss://example.invalid/v1/ws",
+    "development": "ws://127.0.0.1:8765/v1/ws"
+  },
+  "connectTimeoutSeconds": 20,
+  "migrateFrom": []
+}

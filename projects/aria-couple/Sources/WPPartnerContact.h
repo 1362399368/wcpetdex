@@ -1,0 +1,27 @@
+#import <UIKit/UIKit.h>
+
+NS_ASSUME_NONNULL_BEGIN
+@interface WPPartnerContact : NSObject
++ (NSString *)selectedDisplayName;
++ (void)openSelectedConversationInWindow:(nullable UIWindow *)window
+                             completion:(void (^)(BOOL success, NSString *message))completion;
+/// Opens any session (friend or group) through the same guarded WeChat route.
++ (void)openConversationWithUsername:(NSString *)username inWindow:(nullable UIWindow *)window
+                          completion:(void (^)(BOOL success, NSString *message))completion;
+/// 0 and 3 use WeChat's native page sheet: initially 75%, then the saved height.
+/// 1 explicitly opens the normal full-screen conversation.
++ (void)openConversationWithUsername:(NSString *)username inWindow:(nullable UIWindow *)window
+                   presentationMode:(NSInteger)mode completion:(void (^)(BOOL success, NSString *message))completion;
+/// Display name from CContactMgr for any session username; empty when unknown.
++ (NSString *)displayNameForUsername:(NSString *)username;
++ (nullable UIViewController *)visibleController:(nullable UIViewController *)controller;
+@end
+
+/// Searches local WeChat friends in the plugin's own picker and saves only
+/// the selected username/display name on this device.
+@interface WPPartnerPickerController : UITableViewController
+/// Optional reuse for local selection lists; leaves the paired partner intact.
+@property(nonatomic,copy,nullable) void (^selectionHandler)(NSString *username, NSString *displayName);
+@property(nonatomic,copy,nullable) NSString *pickerTitle;
+@end
+NS_ASSUME_NONNULL_END

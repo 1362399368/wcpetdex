@@ -1,0 +1,13 @@
+{
+    email {$PETPAIR_ACME_EMAIL}
+}
+{$PETPAIR_DOMAIN} {
+    header Strict-Transport-Security "max-age=31536000"
+    @public path /health /v1/ws
+    handle @public {
+        reverse_proxy 127.0.0.1:8765
+    }
+    handle {
+        respond "Not found" 404
+    }
+}

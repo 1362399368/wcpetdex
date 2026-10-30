@@ -1,0 +1,29 @@
+[Unit]
+Description=WeChat pet pair protocol 2 service
+After=network.target
+
+[Service]
+Type=simple
+User=petpair
+Group=petpair
+WorkingDirectory=/opt/wechat-pet/Backend
+EnvironmentFile=/etc/wechat-pet/server.env
+ExecStart=/opt/wechat-pet/Backend/.venv/bin/python /opt/wechat-pet/Backend/server.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+UMask=0077
+StateDirectory=wechat-pet
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wechat-pet
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
