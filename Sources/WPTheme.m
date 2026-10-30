@@ -1,4 +1,5 @@
 #import "WPTheme.h"
+#import "WPEdition.h"
 
 const CGFloat WPThemeCardRadius=18;
 static UIColor *WPRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRed:r/255 green:g/255 blue:b/255 alpha:1];}
@@ -209,7 +210,7 @@ UILabel *WPThemeLabel(NSString *text,CGFloat size,UIFontWeight weight,UIColor *c
 }
 - (void)alert:(NSString *)message{
     if(self.presentedViewController)return;
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Zhour" message:message preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert=[UIAlertController alertControllerWithTitle:(WP_EDITION_COUPLE?@"双人桌宠":WPEditionName()) message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];[self presentViewController:alert animated:YES completion:nil];
 }
 @end

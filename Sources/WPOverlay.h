@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "WPEdition.h"
 @interface WPOverlayManager : NSObject
 + (instancetype)sharedManager;
 - (void)start;
@@ -15,4 +16,19 @@
 - (void)closePanel;
 - (void)openSettings;
 - (void)previewMenuRadius;
+#if WP_EDITION_COUPLE
+- (void)openInteractions;
+/// Sends through the pair client; a miss replies to the pending snapshot taken now.
+- (void)sendInteraction:(NSString *)kind completion:(void (^)(BOOL accepted, NSString *message))completion;
+/// Text for the connection pill in settings.
+- (NSString *)connectionStatus;
+- (BOOL)configureCoupleURL:(NSURL *)url token:(NSString *)token;
+- (BOOL)hasSavedCoupleToken;
+- (NSString *)peerStatusText;
+- (BOOL)peerIsOnline;
+/// Zhouyou only; always off in Aria's edition.
+- (NSString *)stealthStatusText;
+- (BOOL)stealthEnabled;
+- (void)setStealthEnabled:(BOOL)enabled;
+#endif
 @end

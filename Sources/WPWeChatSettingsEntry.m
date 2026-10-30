@@ -31,7 +31,7 @@ static BOOL sCollectorRegistrationInProgress;
 @implementation WPZhouyouPluginSettingsController
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title=@"Zhour";
+    self.title=WPEditionName();
     WPSettingsController *settings=[WPSettingsController new];
     __weak typeof(self) weakSelf=self;
     settings.onClose=^{ [weakSelf closeSettings]; };
@@ -121,7 +121,7 @@ static BOOL WPRegisterCollectorClass(Class collectorClass) {
         sCollectorRegistrationInProgress=YES;
         @try {
             ((void(*)(id,SEL,id,id,id))objc_msgSend)(manager,registration,
-                @"Zhour",WPPluginVersion(),WPCollectorControllerName());
+                WPEditionName(),WPPluginVersion(),WPCollectorControllerName());
         } @finally {sCollectorRegistrationInProgress=NO;}
         // A void registration returning normally is the published success
         // contract. Class presence or a singleton alone never hides our row.
@@ -241,7 +241,7 @@ static id WPNewCell(Class cellClass, id controller) {
     if (WPMethodMatches(method, 5, '@') && WPArgumentMatches(method, 2, ":") &&
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@")) {
         return ((id (*)(id, SEL, SEL, id, id))objc_msgSend)(cellClass, selector,
-            action, controller, @"Zhour");
+            action, controller, WPEditionName());
     }
     selector = @selector(normalCellForSel:target:title:accessoryType:);
     method = class_getClassMethod(cellClass, selector);
@@ -249,7 +249,7 @@ static id WPNewCell(Class cellClass, id controller) {
         WPArgumentMatches(method, 3, "@") && WPArgumentMatches(method, 4, "@") &&
         WPArgumentMatches(method, 5, "qiQI")) {
         return ((id (*)(id, SEL, SEL, id, id, NSInteger))objc_msgSend)(cellClass, selector,
-            action, controller, @"Zhour", UITableViewCellAccessoryDisclosureIndicator);
+            action, controller, WPEditionName(), UITableViewCellAccessoryDisclosureIndicator);
     }
     return nil;
 }

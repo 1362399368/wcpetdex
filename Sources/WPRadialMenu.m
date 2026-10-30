@@ -4,6 +4,7 @@
 #import "WPMenuConfiguration.h"
 #import "WPSharedChatAvatar.h"
 #import "WPPartnerContact.h"
+#import "WPEdition.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 #import <float.h>
@@ -21,15 +22,22 @@
 @end
 
 @implementation WPMenuActionButton
-- (BOOL)sendDisabled{return NO;}
+// Stealth keeps the partner from seeing activity, so sending is unavailable.
+- (BOOL)sendDisabled{return WP_FEATURE_STEALTH && WPCanUsePrivateFeatures() && [WPPreferences() boolForKey:@"stealthEnabled"] && [@[@"miss",@"anger"] containsObject:self.actionIdentifier];}
+- (UIColor *)restingTint{
+    if(self.sendDisabled)return UIColor.blackColor;
+    if([self.actionIdentifier isEqualToString:@"miss"])return UIColor.systemPinkColor;
+    if([self.actionIdentifier isEqualToString:@"anger"])return UIColor.systemGrayColor;
+    return nil;
+}
 
 - (instancetype)initWithAction:(NSString *)action title:(NSString *)title symbol:(NSString *)symbol {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _actionIdentifier = [action copy];
-    _actionExplanation = @{@"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手选择聊天场景", @"advisorDirect":@"松手使用固定预设分析", @"advisorHistory":@"松手打开参谋记录", @"contact1":@"松手打开快捷联系人 1", @"contact2":@"松手打开快捷联系人 2", @"contact3":@"松手打开快捷联系人 3"}[action] ?: title;
+    _actionExplanation = @{@"miss":@"松手告诉对方「想你了」", @"anger":@"松手告诉对方「生气了」", @"moments":@"松手进入朋友圈", @"quickChat":@"松手打开快捷聊天", @"settings":@"松手打开设置", @"read":@"松手将所有会话标为已读", @"advisor":@"松手选择聊天场景", @"advisorDirect":@"松手使用固定预设分析", @"advisorHistory":@"松手打开参谋记录", @"contact1":@"松手打开快捷联系人 1", @"contact2":@"松手打开快捷联系人 2", @"contact3":@"松手打开快捷联系人 3"}[action] ?: title;
     self.accessibilityLabel = title;
-    self.accessibilityHint = @{@"moments":@"进入朋友圈", @"quickChat":@"打开快捷聊天", @"settings":@"打开桌宠设置", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
+    self.accessibilityHint = @{@"miss":@"向对方发送想你了互动", @"anger":@"向对方发送生气了互动", @"moments":@"进入朋友圈", @"quickChat":@"打开快捷聊天", @"settings":@"打开桌宠设置", @"read":@"将所有会话标为已读", @"advisor":@"分析当前聊天并给出建议回复"}[action] ?: title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
     self.isAccessibilityElement = YES;
     self.backgroundColor = UIColor.clearColor;
@@ -41,7 +49,8 @@
     _symbolView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbol withConfiguration:configuration]];
     if([action isEqualToString:@"moments"])_symbolView.image=WPMomentsMenuIcon();
     if([action isEqualToString:@"advisor"])_symbolView.image=WPAdvisorMenuIcon();
-    _symbolView.tintColor = UIColor.labelColor;
+    if([action isEqualToString:@"anger"])_symbolView.image=WPBrokenHeartMenuIcon();
+    _symbolView.tintColor = [self restingTint] ?: UIColor.labelColor;
     _symbolView.contentMode = UIViewContentModeScaleAspectFit;
     _symbolView.userInteractionEnabled = NO;
     _symbolView.isAccessibilityElement = NO;
@@ -68,7 +77,7 @@
     _menuSelected = selected;
     self.backgroundColor = UIColor.clearColor;
     self.layer.borderWidth = 0;
-    _symbolView.tintColor = selected ? UIColor.systemBlueColor : UIColor.labelColor;
+    _symbolView.tintColor = [self restingTint] ?: (selected ? UIColor.systemBlueColor : UIColor.labelColor);
     _symbolView.transform = selected ? CGAffineTransformMakeScale(1.18, 1.18) : CGAffineTransformIdentity;
     self.accessibilityTraits = UIAccessibilityTraitButton | (selected ? UIAccessibilityTraitSelected : 0) | (self.sendDisabled ? UIAccessibilityTraitNotEnabled : 0);
 }
@@ -101,7 +110,10 @@
     self.isAccessibilityElement = NO;
     self.accessibilityViewIsModal = YES;
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _allButtons = @[
+    NSArray *couple = WP_EDITION_COUPLE ? @[
+        [[WPMenuActionButton alloc] initWithAction:@"miss" title:@"想你了" symbol:@"heart.fill"],
+        [[WPMenuActionButton alloc] initWithAction:@"anger" title:@"生气了" symbol:@"heart.slash.fill"]] : @[];
+    _allButtons = [couple arrayByAddingObjectsFromArray:@[
         [[WPMenuActionButton alloc] initWithAction:@"moments" title:@"朋友圈" symbol:@"camera.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"quickChat" title:@"快捷聊天" symbol:@"bubble.left.and.bubble.right.fill"],
         [[WPMenuActionButton alloc] initWithAction:@"settings" title:@"设置" symbol:@"gearshape.fill"],
@@ -111,7 +123,7 @@
         [[WPMenuActionButton alloc] initWithAction:@"advisorHistory" title:@"参谋记录" symbol:@"clock.arrow.circlepath"],
         [[WPMenuActionButton alloc] initWithAction:@"contact1" title:@"快捷联系人 1" symbol:@"person.circle"],
         [[WPMenuActionButton alloc] initWithAction:@"contact2" title:@"快捷联系人 2" symbol:@"person.circle"],
-        [[WPMenuActionButton alloc] initWithAction:@"contact3" title:@"快捷联系人 3" symbol:@"person.circle"]
+        [[WPMenuActionButton alloc] initWithAction:@"contact3" title:@"快捷联系人 3" symbol:@"person.circle"]]
     ];
     for (WPMenuActionButton *button in _allButtons) {
         [button addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];

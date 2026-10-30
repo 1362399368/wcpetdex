@@ -24,9 +24,15 @@ static NSDictionary *WPCReadJSON(NSString *path) {
 }
 static NSString *WPCLocalSpritePath(NSString *directory,NSDictionary *metadata) {
     NSString *name=WPCString(metadata[@"spritesheetPath"]);
-    if([directory.stringByStandardizingPath isEqual:WPDefaultPetDirectory().stringByStandardizingPath]){
+    if([directory.stringByStandardizingPath isEqual:WPDefaultPetDirectory().stringByStandardizingPath] ||
+       [directory.stringByStandardizingPath isEqual:[[WPResourceDirectory() stringByAppendingPathComponent:@"DefaultPet"] stringByStandardizingPath]]){
         NSString *compact=[directory stringByAppendingPathComponent:@"compact-row-00.png"];
         if([NSFileManager.defaultManager fileExistsAtPath:compact])return compact;
+        NSArray *rows=[metadata[@"wpBundledRowAtlasPaths"] isKindOfClass:NSArray.class]?metadata[@"wpBundledRowAtlasPaths"]:nil;
+        NSString *first=rows.count?WPCString(rows.firstObject):nil;
+        if(first.length && [first isEqual:first.lastPathComponent]){
+            NSString *row=[directory stringByAppendingPathComponent:first];if([NSFileManager.defaultManager fileExistsAtPath:row])return row;
+        }
     }
     NSString *paged=[directory stringByAppendingPathComponent:@".wp-paged-v121"];
     NSDictionary *local=WPCReadJSON([paged stringByAppendingPathComponent:@"pet.json"]);

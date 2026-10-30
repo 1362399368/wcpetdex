@@ -1,12 +1,21 @@
 #import "WPMenuConfiguration.h"
 #import "WPCommon.h"
 #import "WPPartnerContact.h"
+#import "WPEdition.h"
 
 static NSString * const WPMenuOrderKey=@"radialMenuOrder";
 static NSString * const WPMenuEnabledKey=@"radialMenuEnabled";
 
-NSArray<NSString *> *WPMenuAvailableActions(void){return @[@"read",@"advisor",@"moments",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"];}
-NSString *WPMenuActionTitle(NSString *identifier){return @{@"read":@"一键已读",@"advisor":@"参谋聊天",@"advisorDirect":@"直接参谋",@"advisorHistory":@"参谋记录",@"moments":@"朋友圈",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"contact1":@"快捷联系人 1",@"contact2":@"快捷联系人 2",@"contact3":@"快捷联系人 3"}[identifier]?:@"";}
+// Couple editions keep their original menu first: moments, the two
+// interactions sent to the partner, then the shared actions.
+NSArray<NSString *> *WPMenuAvailableActions(void){
+    if(WP_EDITION_COUPLE)return @[@"moments",@"miss",@"anger",@"read",@"advisor",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"];
+    return @[@"read",@"advisor",@"moments",@"quickChat",@"settings",@"contact1",@"contact2",@"contact3",@"advisorHistory",@"advisorDirect"];
+}
+static NSArray<NSString *> *WPMenuDefaultEnabledActions(void){
+    return WP_EDITION_COUPLE?@[@"moments",@"miss",@"anger",@"read",@"advisor"]:@[@"read",@"advisor",@"moments"];
+}
+NSString *WPMenuActionTitle(NSString *identifier){return @{@"miss":@"想你了",@"anger":@"生气了",@"read":@"一键已读",@"advisor":@"参谋聊天",@"advisorDirect":@"直接参谋",@"advisorHistory":@"参谋记录",@"moments":@"朋友圈",@"quickChat":@"快捷聊天",@"settings":@"桌宠设置",@"contact1":@"快捷联系人 1",@"contact2":@"快捷联系人 2",@"contact3":@"快捷联系人 3"}[identifier]?:@"";}
 static BOOL WPMenuIsContact(NSString *identifier){return [@[@"contact1",@"contact2",@"contact3"] containsObject:identifier];}
 NSString *WPMenuContactUsername(NSString *identifier){
     if(!WPMenuIsContact(identifier))return nil;
@@ -33,7 +42,7 @@ NSArray<NSString *> *WPMenuOrderedActions(void){
 }
 NSArray<NSString *> *WPMenuEnabledActions(void){
     NSArray *order=WPMenuOrderedActions();id saved=[WPPreferences() objectForKey:WPMenuEnabledKey];
-    NSArray *enabled=[saved isKindOfClass:NSArray.class]?saved:@[@"read",@"advisor",@"moments"];
+    NSArray *enabled=[saved isKindOfClass:NSArray.class]?saved:WPMenuDefaultEnabledActions();
     NSMutableArray *result=[NSMutableArray new];for(NSString *item in order)if([enabled containsObject:item])[result addObject:item];return result;
 }
 void WPMenuSetOrder(NSArray<NSString *> *identifiers){

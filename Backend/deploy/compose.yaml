@@ -1,0 +1,48 @@
+services:
+  backend:
+    build: ..
+    restart: unless-stopped
+    environment:
+      PETPAIR_HOST: 0.0.0.0
+      PETPAIR_PORT: 8765
+      PETPAIR_DB: /data/petpair.sqlite3
+      PETPAIR_ADMIN_TOKEN_FILE: /run/secrets/admin_token
+    secrets:
+      - admin_token
+    volumes:
+      - pair_data:/data
+    # No ports: the HTTP/WebSocket port is reachable only on this Docker network.
+    networks: [petpair]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      PETPAIR_DOMAIN: ${PETPAIR_DOMAIN:?Set PETPAIR_DOMAIN}
+      PETPAIR_ACME_EMAIL: ${PETPAIR_ACME_EMAIL:?Set PETPAIR_ACME_EMAIL}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [petpair]
+    depends_on:
+      backend: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+networks:
+  petpair:
+volumes:
+  pair_data:
+  caddy_data:
+  caddy_config:
+secrets:
+  admin_token:
+    file: ./secrets/admin_token

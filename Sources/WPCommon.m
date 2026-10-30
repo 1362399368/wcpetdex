@@ -7,6 +7,9 @@
 #import <objc/message.h>
 #import <ImageIO/ImageIO.h>
 #import "WPEdition.h"
+#if WP_EDITION_COUPLE
+#import "WPBackendConfiguration.h"
+#endif
 
 NSString * const WPSelectedPetDidChangeNotification = @"WeChatPet.SelectedPetDidChange";
 NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange";
@@ -14,21 +17,20 @@ NSString * const WPSettingsDidChangeNotification = @"WeChatPet.SettingsDidChange
 extern NSString * _Nullable WPEmbeddedResourceDirectory(void);
 
 NSBundle *WPResourceBundle(void) {
-    for (NSString *name in @[@"Zhour", @"SinglePet-zhour", @"zhour-single"]) {
+    for (NSString *name in WPEditionResourceBundleNames()) {
         NSURL *url = [[NSBundle mainBundle] URLForResource:name withExtension:@"bundle"];
         if (url) return [NSBundle bundleWithURL:url];
     }
     Dl_info info;
     if (dladdr((const void *)&WPResourceBundle, &info) && info.dli_fname) {
         NSString *dir = [[NSString stringWithUTF8String:info.dli_fname] stringByDeletingLastPathComponent];
-        for (NSString *candidate in @[[dir stringByAppendingPathComponent:@"Zhour.bundle"],
-                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"Zhour.bundle"],
-                                      [dir stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
-                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"SinglePet-zhour.bundle"],
-                                      [dir stringByAppendingPathComponent:@"zhour-single.bundle"],
-                                      [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"zhour-single.bundle"]]) {
-            NSBundle *bundle = [NSBundle bundleWithPath:candidate];
-            if (bundle) return bundle;
+        for (NSString *name in WPEditionResourceBundleNames()) {
+            NSString *file = [name stringByAppendingPathExtension:@"bundle"];
+            for (NSString *candidate in @[[dir stringByAppendingPathComponent:file],
+                                          [[dir stringByDeletingLastPathComponent] stringByAppendingPathComponent:file]]) {
+                NSBundle *bundle = [NSBundle bundleWithPath:candidate];
+                if (bundle) return bundle;
+            }
         }
     }
     return [NSBundle mainBundle];
@@ -46,16 +48,20 @@ NSUserDefaults *WPPreferences(void) {
     static NSUserDefaults *defaults;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        defaults = [[NSUserDefaults alloc] initWithSuiteName:@"dev.zhour.wechatpet.single"];
-        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @YES, @"quickChatFlash": @YES,
+        defaults = [[NSUserDefaults alloc] initWithSuiteName:WPEditionPreferencesSuite()];
+        NSMutableDictionary *registered=[@{@"petSize": @88, @"petOpacity": @1.0,@"menuScale":@1.0, @"enabled": @YES, @"autoPeek": @YES, @"quickChatEnabled": @(!WP_EDITION_COUPLE), @"quickChatFlash": @YES,
             @"unreadAvatarEnabled":@YES,@"unreadAvatarOffsetX":@0,@"unreadAvatarOffsetY":@0} mutableCopy];
+#if WP_EDITION_COUPLE
+        registered[@"interactionBadgeOffsetX"]=@0;registered[@"interactionBadgeOffsetY"]=@0;
+        NSString *backend=WPDefaultCoupleURLString();if(backend.length)registered[@"coupleURL"]=backend;
+#endif
         [defaults registerDefaults:registered];
     });
     return defaults;
 }
 
 NSString *WPDataDirectory(void) {
-    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"WeChatPetSingle"];
+    NSString *path = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:WPEditionDataDirectoryName()];
     [[NSFileManager defaultManager] createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
     return path;
 }

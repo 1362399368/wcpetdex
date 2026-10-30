@@ -1,4 +1,5 @@
 #import "WPHomePresentation.h"
+#import "WPEdition.h"
 #import "WPCommon.h"
 #import "WPTheme.h"
 #import "WPSharedChatAvatar.h"
@@ -51,10 +52,11 @@ static NSString *WPHomeContactString(id contact,NSArray<NSString *> *keys){
         _avatar.layer.cornerRadius=39;_avatar.clipsToBounds=YES;_avatar.translatesAutoresizingMaskIntoConstraints=NO;
         _nickname=WPThemeLabel(@"微信用户",15,UIFontWeightMedium,WPThemePrimaryText());
         _nickname.accessibilityIdentifier=@"WPHomeAccountNickname";_nickname.textAlignment=NSTextAlignmentCenter;_nickname.numberOfLines=1;
-        UILabel *brand=WPThemeLabel(@"Zhour",24,UIFontWeightBold,UIColor.systemRedColor);
+        NSString *brandName=WP_EDITION_ARIA?@"Aria专属版":WPEditionName();
+        UILabel *brand=WPThemeLabel(brandName,24,UIFontWeightBold,UIColor.systemRedColor);
         NSArray<UIColor *> *colors=@[UIColor.systemPinkColor,UIColor.systemOrangeColor,UIColor.systemTealColor,UIColor.systemBlueColor,UIColor.systemPurpleColor];
-        NSMutableAttributedString *colorful=[[NSMutableAttributedString alloc] initWithString:@"Zhour" attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:24 weight:UIFontWeightBold]}];
-        for(NSUInteger i=0;i<colors.count;i++)[colorful addAttribute:NSForegroundColorAttributeName value:colors[i] range:NSMakeRange(i,1)];
+        NSMutableAttributedString *colorful=[[NSMutableAttributedString alloc] initWithString:brandName attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:24 weight:UIFontWeightBold]}];
+        for(NSUInteger i=0;i<brandName.length;i++)[colorful addAttribute:NSForegroundColorAttributeName value:colors[i%colors.count] range:NSMakeRange(i,1)];
         brand.attributedText=colorful;
         brand.accessibilityIdentifier=@"WPHomeBrand";brand.textAlignment=NSTextAlignmentCenter;
         UIStackView *stack=[[UIStackView alloc] initWithArrangedSubviews:@[_avatar,_nickname,brand]];

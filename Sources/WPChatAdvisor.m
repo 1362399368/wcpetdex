@@ -1,4 +1,5 @@
 #import "WPChatAdvisor.h"
+#import "WPEdition.h"
 #import "WPCommon.h"
 #import "WPSessionEligibility.h"
 #import "WPPartnerContact.h"
@@ -117,7 +118,7 @@ static NSString *WPCALastRoute,*WPCALastFailure;
 static NSString *WPCAPreviewKey;
 #endif
 static NSDictionary *WPCAKeyQuery(void) {
-    return @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:@"dev.zhour.wechatpet.single.chat-advisor",(__bridge id)kSecAttrAccount:@"api-key"};
+    return @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:[WPEditionKeychainPrefix() stringByAppendingString:@".chat-advisor"],(__bridge id)kSecAttrAccount:@"api-key"};
 }
 static NSString *WPCALoadKey(void) {
     NSMutableDictionary *query=WPCAKeyQuery().mutableCopy;query[(__bridge id)kSecReturnData]=@YES;query[(__bridge id)kSecMatchLimit]=(__bridge id)kSecMatchLimitOne;

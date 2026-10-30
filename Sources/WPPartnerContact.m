@@ -3,6 +3,9 @@
 #import "WPResizableChat.h"
 #import "WPChatPresentationState.h"
 #import "WPAdvisorTaskCenter.h"
+#if WP_FEATURE_WORK_CHECKIN
+#import "WPWorkCheckinReminder.h"
+#endif
 #import <objc/runtime.h>
 
 static char WPHalfNavigationKey;
@@ -160,6 +163,14 @@ static NSString *WPNameForContact(id contact) {
     }
     return WPUsernameForValue(contact);
 }
+
+#if WP_EDITION_COUPLE
+static void WPSavePartner(NSString *username, NSString *displayName) {
+    [WPPreferences() setObject:username forKey:@"partnerUsername"];
+    [WPPreferences() setObject:displayName.length ? displayName : username forKey:@"partnerDisplayName"];
+    [NSNotificationCenter.defaultCenter postNotificationName:WPSettingsDidChangeNotification object:nil];
+}
+#endif
 
 @implementation WPPartnerContact
 + (NSString *)displayNameForUsername:(NSString *)username {
@@ -417,7 +428,67 @@ static NSString *WPNameForContact(id contact) {
     }
 }
 
-
+#if WP_EDITION_COUPLE
++ (NSString *)selectedDisplayName {
+    NSString *value = [WPPreferences() stringForKey:@"partnerDisplayName"];
+    return value.length ? value : @"未选择";
+}
++ (void)openSelectedConversationInWindow:(UIWindow *)window completion:(void (^)(BOOL, NSString *))completion {
+    NSAssert(NSThread.isMainThread, @"Open WeChat conversations on the main queue");
+    NSString *username = [WPPreferences() stringForKey:@"partnerUsername"];
+    if (!username.length) { completion(NO, [NSString stringWithFormat:@"请先在%@设置中选择你的对象。", WPEditionName()]); return; }
+    [self openConversationWithUsername:username inWindow:window presentationMode:3 completion:completion];
+}
+#endif
+#if WP_FEATURE_WORK_CHECKIN
++ (void)sendTextToSelectedPartner:(NSString *)text inWindow:(UIWindow *)window
+                      completion:(void (^)(BOOL, NSString *))completion {
+    NSAssert(NSThread.isMainThread,@"Send WeChat text on the main queue");
+    NSString *username=[WPPreferences() stringForKey:@"partnerUsername"];
+    NSString *body=[text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if(!username.length || !window || window.hidden || !window.rootViewController ||
+       UIApplication.sharedApplication.applicationState!=UIApplicationStateActive){
+        completion(NO,@"微信未在前台，或尚未选择对象");return;
+    }
+    if(!body.length || body.length>500){completion(NO,@"提醒文案须为 1–500 字");return;}
+    if(![WPWorkCheckinReminder isWithinSendWindowAtDate:NSDate.date]){completion(NO,@"已超出今天的打卡提醒时段");return;}
+    [self openConversation:username inWindow:window completion:^(BOOL opened,NSString *reason){
+        if(!opened){completion(NO,reason);return;}
+        if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive ||
+           ![WPWorkCheckinReminder isWithinSendWindowAtDate:NSDate.date] ||
+           ![[WPPreferences() stringForKey:@"partnerUsername"] isEqualToString:username] ||
+           ![WPChatPresentationActiveUsernameInWindow(window) isEqualToString:username]){
+            completion(NO,@"对象聊天已切换，未发送提醒");return;
+        }
+        id manager=WPWeChatService(@"MMMsgLogicManager");
+        id logic=WPObjectCall(manager,@"GetCurrentLogicController",nil,NO);
+        Class logicClass=NSClassFromString(@"WeixinContentLogicController");
+        id contact=WPObjectCall(logic,@"m_contact",nil,NO);
+        if(!logicClass || ![logic isKindOfClass:logicClass] ||
+           ![WPUsernameForValue(contact) isEqualToString:username]){
+            completion(NO,@"当前微信版本未找到对象聊天的文字发送接口");return;
+        }
+        SEL selector=NSSelectorFromString(@"SendTextMessage:replyingMessage:isPasted:");
+        NSMethodSignature *signature=WPSignature(logic,selector,3);
+        if(!signature || WPUnqualifiedType(signature.methodReturnType)[0]!='v' ||
+           !WPObjectType([signature getArgumentTypeAtIndex:2]) ||
+           !WPObjectType([signature getArgumentTypeAtIndex:3]) ||
+           !strchr("Bc",WPUnqualifiedType([signature getArgumentTypeAtIndex:4])[0])){
+            completion(NO,@"当前微信版本的文字发送参数不兼容");return;
+        }
+        @try {
+            NSInvocation *call=[NSInvocation invocationWithMethodSignature:signature];
+            call.target=logic;call.selector=selector;
+            __unsafe_unretained id content=body,reply=nil;unsigned char pasted=0;
+            [call setArgument:&content atIndex:2];[call setArgument:&reply atIndex:3];
+            [call setArgument:&pasted atIndex:4];[call invoke];
+            completion(YES,@"已调用微信发送接口，请在聊天中确认送达状态");
+        } @catch(__unused NSException *exception) {
+            completion(NO,@"微信文字发送接口未执行，请检查当前版本适配");
+        }
+    }];
+}
+#endif
 @end
 
 @interface WPPartnerPickerController () <UISearchResultsUpdating, UISearchControllerDelegate>
@@ -439,7 +510,7 @@ static NSString *WPNameForContact(id contact) {
 @implementation WPPartnerPickerController
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = self.pickerTitle.length?self.pickerTitle:@"选择联系人";
+    self.title = self.pickerTitle.length?self.pickerTitle:(WP_EDITION_COUPLE && !self.selectionHandler?@"选择我的对象":@"选择联系人");
     self.contacts = @[]; self.filtered = @[];
     self.contactSearch = [[UISearchController alloc] initWithSearchResultsController:nil];
     self.contactSearch.obscuresBackgroundDuringPresentation = NO;
@@ -567,6 +638,9 @@ static NSString *WPNameForContact(id contact) {
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return self.filtered.count; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+#if WP_EDITION_COUPLE
+    if(!self.selectionHandler)return self.contacts.count ? @"只在这台手机保存所选对象。将桌宠点击动作设为「对象聊天」即可快速打开，不会发送微信消息。" : nil;
+#endif
     return self.contacts.count ? @"选择联系人用于当前功能，不会发送微信消息。" : nil;
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -575,6 +649,9 @@ static NSString *WPNameForContact(id contact) {
     NSDictionary *contact = self.filtered[indexPath.row];
     cell.textLabel.text = contact[@"name"]; cell.detailTextLabel.text = contact[@"username"];
     cell.accessoryType = UITableViewCellAccessoryNone;
+#if WP_EDITION_COUPLE
+    if(!self.selectionHandler && [[WPPreferences() stringForKey:@"partnerUsername"] isEqualToString:contact[@"username"]])cell.accessoryType = UITableViewCellAccessoryCheckmark;
+#endif
     return cell;
 }
 - (void)returnToSettingsAfterSelection {
@@ -592,6 +669,9 @@ static NSString *WPNameForContact(id contact) {
     self.selectionCommitted = YES;
     [self cancelLoading];
     if(self.selectionHandler)self.selectionHandler(contact[@"username"],contact[@"name"]);
+#if WP_EDITION_COUPLE
+    else WPSavePartner(contact[@"username"], contact[@"name"]);
+#endif
     if (self.contactSearch.isActive) {
         // Search dismissal and navigation pop are separate UIKit transitions.
         // Wait for the former before returning to settings.
